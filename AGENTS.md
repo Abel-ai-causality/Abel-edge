@@ -6,7 +6,7 @@ Two modes: **use** this as a tool, or **develop** on this repo.
 
 Read `CAPABILITY.md` — it has everything: install, validate, diagnose, fix loop.
 
-    pip install git+https://github.com/cauchyturing/causal-edge.git
+    pip install git+https://github.com/Abel-ai-causality/causal-edge.git
     causal-edge validate --csv your_backtest.csv
 
 ## Develop on This Repo

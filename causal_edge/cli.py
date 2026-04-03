@@ -7,13 +7,6 @@ from pathlib import Path
 
 import click
 
-from causal_edge import __version__
-
-
-@click.group()
-def main():
-    """causal-edge: Agent-native quant framework."""
-
 
 def _get_version() -> str:
     """Return installed package version, or fall back to source version."""
@@ -21,6 +14,15 @@ def _get_version() -> str:
         return metadata.version("causal-edge")
     except metadata.PackageNotFoundError:
         return __version__
+
+
+from causal_edge import __version__
+
+
+@click.group(context_settings={"help_option_names": ["-h", "--help"]})
+@click.version_option(version=_get_version(), prog_name="causal-edge")
+def main():
+    """causal-edge: Agent-native quant framework."""
 
 
 @main.command("version")

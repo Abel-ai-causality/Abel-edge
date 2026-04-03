@@ -21,9 +21,12 @@ def test_version():
 
 def test_status_empty():
     """Status with empty strategies.yaml should show 0 strategies."""
-    result = CliRunner().invoke(main, ["status"])
-    assert result.exit_code == 0
-    assert "Strategies: 0" in result.output
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        Path("strategies.yaml").write_text("settings: {}\nstrategies: []\n", encoding="utf-8")
+        result = runner.invoke(main, ["status"])
+        assert result.exit_code == 0
+        assert "Strategies: 0" in result.output
 
 
 def test_init_creates_project(tmp_path):
@@ -55,9 +58,12 @@ def test_init_fails_if_dir_exists(tmp_path):
 
 def test_run_empty():
     """Run with no strategies should print message, not crash."""
-    result = CliRunner().invoke(main, ["run"])
-    assert result.exit_code == 0
-    assert "No strategies" in result.output
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        Path("strategies.yaml").write_text("settings: {}\nstrategies: []\n", encoding="utf-8")
+        result = runner.invoke(main, ["run"])
+        assert result.exit_code == 0
+        assert "No strategies" in result.output
 
 
 def test_dashboard_empty():
@@ -73,9 +79,12 @@ def test_dashboard_empty():
 
 def test_validate_empty():
     """Validate with no strategies should print message, not crash."""
-    result = CliRunner().invoke(main, ["validate"])
-    assert result.exit_code == 0
-    assert "No strategies" in result.output
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        Path("strategies.yaml").write_text("settings: {}\nstrategies: []\n", encoding="utf-8")
+        result = runner.invoke(main, ["validate"])
+        assert result.exit_code == 0
+        assert "No strategies" in result.output
 
 
 def test_discover_ethusd_parents(monkeypatch, tmp_path):

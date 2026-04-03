@@ -26,7 +26,7 @@ Neither edge exists alone. Causal without agents = a paper you read once. Agents
 ## 5 Minutes: See Both Edges
 
 ```bash
-pip install git+https://github.com/cauchyturing/causal-edge.git
+pip install git+https://github.com/Abel-ai-causality/causal-edge.git
 causal-edge init my-portfolio
 cd my-portfolio
 causal-edge run && causal-edge validate
