@@ -35,6 +35,7 @@ from causal_edge.validation.gate import validate_strategy
 
 # ── Fixtures ──────────────────────────────────────────────────────────
 
+
 def _make_pnl(n=500, mean=0.001, std=0.02, seed=42):
     """Generate synthetic daily PnL array."""
     rng = np.random.RandomState(seed)
@@ -73,6 +74,7 @@ def bad_strategy():
 
 
 # ── Basic Metric Tests ────────────────────────────────────────────────
+
 
 class TestSharpe:
     def test_positive_mean(self):
@@ -138,18 +140,37 @@ class TestBootstrap:
 
 # ── Full Metrics Computation ──────────────────────────────────────────
 
+
 class TestComputeAllMetrics:
     def test_returns_all_keys(self, good_strategy):
         pnl, dates, pos = good_strategy
         m = compute_all_metrics(pnl, dates, pos)
         required_keys = [
-            "sharpe", "lo_adjusted", "sortino", "total_pnl", "max_dd",
-            "calmar", "dsr", "pbo", "oos_is", "loss_years",
-            "neg_roll_frac", "omega", "skew", "hill_alpha",
-            "cvar_var_ratio", "sharpe_lo_ratio", "bootstrap_p",
-            "ic", "ic_hit_rate", "ic_stability", "ic_monthly_mean",
-            "active_days", "total_days", "yearly_sharpes",
-            "is_sharpe", "oos_sharpe",
+            "sharpe",
+            "lo_adjusted",
+            "sortino",
+            "total_pnl",
+            "max_dd",
+            "calmar",
+            "dsr",
+            "pbo",
+            "oos_is",
+            "loss_years",
+            "neg_roll_frac",
+            "omega",
+            "skew",
+            "sharpe_lo_ratio",
+            "bootstrap_p",
+            "ic",
+            "ic_hit_rate",
+            "ic_stability",
+            "ic_monthly_mean",
+            "ic_applicable",
+            "active_days",
+            "total_days",
+            "yearly_sharpes",
+            "is_sharpe",
+            "oos_sharpe",
         ]
         for key in required_keys:
             assert key in m, f"Missing key: {key}"
@@ -176,8 +197,7 @@ class TestComputeAllMetrics:
 
     def test_too_short_raises(self):
         with pytest.raises(ValueError, match="at least 30"):
-            compute_all_metrics(np.array([0.01] * 10),
-                                _make_dates(10))
+            compute_all_metrics(np.array([0.01] * 10), _make_dates(10))
 
     def test_nan_handling(self):
         pnl = _make_pnl(n=100)
