@@ -58,8 +58,7 @@ def validate_strategy(
 
     pnl = df["pnl"].values.astype(float)
     dates = pd.DatetimeIndex(df["date"])
-    positions = (df[positions_col].values.astype(float)
-                 if positions_col in df.columns else None)
+    positions = df[positions_col].values.astype(float) if positions_col in df.columns else None
 
     # Auto-detect or load profile
     if profile is None:
@@ -69,24 +68,27 @@ def validate_strategy(
     prof = load_profile(profile_name)
 
     # Compute all metrics
-    metrics = compute_all_metrics(pnl, dates, positions)
+    if positions is not None:
+        metrics = compute_all_metrics(pnl, dates, positions, prof)
+    else:
+        metrics = compute_all_metrics(pnl, dates, profile=prof)
 
     # Run validation gate
     passed, failures = validate(metrics, prof)
 
     # Extract triangle
     mt = prof.get("metric_triangle", {})
-    opt_key = {"lo_adjusted_sharpe": "lo_adjusted",
-               "sharpe": "sharpe"}.get(mt.get("optimize", "lo_adjusted_sharpe"),
-                                       "lo_adjusted")
+    opt_key = {"lo_adjusted_sharpe": "lo_adjusted", "sharpe": "sharpe"}.get(
+        mt.get("optimize", "lo_adjusted_sharpe"), "lo_adjusted"
+    )
     triangle = {
         "ratio": metrics.get(opt_key, 0),
         "rank": metrics.get("ic", 0),
         "shape": metrics.get("omega", 0),
     }
 
-    # Count tests
-    total_tests = len(failures) + _count_passed(metrics, prof)
+    # Count applicable tests
+    total_tests = _count_total(metrics, prof)
 
     return {
         "verdict": "PASS" if passed else "FAIL",
@@ -141,8 +143,10 @@ def print_validation_report(results: dict) -> None:
         else:
             status, marker = "FAIL", "x"
         print(f"\n  [{marker}] {sid:15s}  {badge:>6s}  {status}")
-        print(f"      Triangle: Lo={tri['ratio']:.2f}  "
-              f"IC={tri['rank']:.3f}  Omega={tri['shape']:.2f}")
+        print(
+            f"      Triangle: Lo={tri['ratio']:.2f}  "
+            f"IC={tri['rank']:.3f}  Omega={tri['shape']:.2f}"
+        )
         if r["failures"]:
             for f in r["failures"]:
                 label = "SKIP" if verdict == "SKIP" else "FAIL"
@@ -171,11 +175,10 @@ def print_validation_report(results: dict) -> None:
         print("    Export → causal-edge validate --export report.txt")
 
 
-def _count_passed(metrics: dict, profile: dict) -> int:
-    """Count total tests that could be run."""
-    count = 9  # base: DSR, PBO, OOS/IS, NegRoll, LossYrs, Lo, Omega, MaxDD, PnLfloor
+def _count_total(metrics: dict, profile: dict) -> int:
+    """Count total applicable validation checks."""
+    count = 9  # DSR, PBO, OOS/IS, NegRoll, LossYrs, Lo, Omega, MaxDD, PnL floor
     count += 1  # Sharpe/Lo ratio
-    count += 1  # Bootstrap
-    if metrics.get("ic", 0) != 0:
+    if metrics.get("ic_applicable", False):
         count += 2  # IC min + IC stability
     return count

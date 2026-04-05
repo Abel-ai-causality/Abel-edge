@@ -95,13 +95,15 @@ def dashboard(config, output):
 @click.option("--export", "export_path", default=None, help="Export report to file")
 @click.option("--config", default="strategies.yaml", help="Config file path")
 def validate(strategy, verbose, csv_path, export_path, config):
-    """Run Abel Proof 15-test validation on strategies."""
+    """Run Abel Proof validation on strategies."""
     import io
     import sys
 
     from causal_edge.validation.gate import validate_strategy, print_validation_report
 
     results = {}
+    old_stdout = None
+    capture = None
 
     if csv_path:
         # Quick path: validate a standalone CSV without strategies.yaml
@@ -163,6 +165,8 @@ def validate(strategy, verbose, csv_path, export_path, config):
                     "ic",
                     "ic_hit_rate",
                 ):
+                    if key.startswith("ic") and not m.get("ic_applicable", False):
+                        continue
                     if key in m:
                         print(f"    {key:20s} {m[key]:.4f}")
                 if "yearly_sharpes" in m:
@@ -172,7 +176,7 @@ def validate(strategy, verbose, csv_path, export_path, config):
 
     if export_path:
         sys.stdout = old_stdout
-        report_text = capture.getvalue()
+        report_text = capture.getvalue() if capture is not None else ""
         click.echo(report_text, nl=False)  # also print to terminal
         Path(export_path).write_text(report_text, encoding="utf-8")
         click.echo(f"\n  Report exported to {export_path}")
