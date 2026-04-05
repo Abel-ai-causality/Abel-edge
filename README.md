@@ -2,7 +2,7 @@
 
 **Two edges. One framework.**
 
-**Causal edge** — correlations break when regimes change. Only causal structure survives. Three strategies, same 15 tests, prove it:
+**Causal edge** — correlations break when regimes change. Only causal structure survives. Three strategies, same audited validation contract, prove it:
 
 ```
 Correlation (SMA)    →  Lo = -0.65   dead on arrival
@@ -16,7 +16,7 @@ Causal (Abel graph)  →  Lo = +0.55   alive
 Agent receives repo URL
   → reads CAPABILITY.md (90 lines)
   → installs, validates, diagnoses failures, applies fixes
-  → reports: "your strategy went from 8/21 to 14/21"
+  → reports: "your strategy improved under the same audited gate contract"
 ```
 
 Neither edge exists alone. Causal without agents = a paper you read once. Agents without causal = fast noise. Together = **autonomous discovery of what actually works.**
@@ -82,11 +82,11 @@ Verified across 38 controlled experiments.
 
 ## Demo Strategies
 
-| Strategy | What it is | Score | What it proves |
-|----------|-----------|-------|----------------|
-| `sma_crossover` | Simple moving average | 11/21 | Random signals fail completely |
-| `momentum_ml` | Walk-forward GBDT | 11/20 | ML on noise is still noise |
-| `causal_demo` | Abel causal graph voting | 13/20 | Causal structure produces real edge |
+| Strategy | What it is | Validation note | What it proves |
+|----------|-----------|-----------------|----------------|
+| `sma_crossover` | Simple moving average | Uses the audited live `validate` contract (score denominator depends on applicable gates) | Random signals fail completely |
+| `momentum_ml` | Walk-forward GBDT | Uses the audited live `validate` contract (score denominator depends on applicable gates) | ML on noise is still noise |
+| `causal_demo` | Abel causal graph voting | Uses the audited live `validate` contract (score denominator depends on applicable gates) | Causal structure produces real edge |
 
 ## Commands
 
@@ -94,7 +94,7 @@ Verified across 38 controlled experiments.
 causal-edge init <name>              # scaffold project with 3 demo strategies
 causal-edge run [--strategy ID]      # run strategies, write trade logs
 causal-edge dashboard                # generate dark-theme dashboard HTML
-causal-edge validate [--verbose]     # Abel Proof 15-test validation
+causal-edge validate [--verbose]     # Abel Proof validation (audited live gate contract)
 causal-edge validate --csv file.csv  # validate any backtest CSV directly
 causal-edge validate --export r.txt  # export report for sharing
 causal-edge discover <TICKER>        # find causal parents (Abel API key)
@@ -106,7 +106,7 @@ causal-edge discover <TICKER>        # find causal parents (Abel API key)
 CAPABILITY.md          → agent reads this, gains full capability
 AGENTS.md              → "use as tool" or "develop on this repo"
 causal_edge/
-  validation/          → Abel Proof metric triangle + 15-test gate
+  validation/          → Abel Proof metric triangle + audited live gate contract
   engine/              → StrategyEngine ABC + execution
   dashboard/           → Jinja2 + Plotly → static HTML
   plugins/             → optional (Abel causal discovery)
@@ -121,6 +121,7 @@ tests/
 ## Documentation
 
 - [`CAPABILITY.md`](CAPABILITY.md) — agent capability acquisition (start here)
+- [`docs/validation-audit-matrix.md`](docs/validation-audit-matrix.md) — audited gate/metric decisions and migration notes
 - [Adding a Strategy](docs/add-strategy.md) — three paths: CSV / engine / causal
 - [Why Causal?](docs/why-causal.md) — Pearl, DGP, intervention invariance
 - [Agent Developer Guide](docs/harness-guide.md) — how agents operate this framework

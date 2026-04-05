@@ -10,6 +10,11 @@ Three leverage-invariant dimensions:
 ### Validate a strategy
     causal-edge validate --strategy <ID> --verbose
 
+### Contract notes
+- The audited live validation contract uses applicable-gate denominators rather than legacy `20/21` score narratives.
+- Typical denominators are `10` when the IC family is not applicable and `12` when the IC family is applicable.
+- Deferred/removed gates and profile keys are tracked in `causal_edge/validation/deferred_registry.yaml`.
+
 ### Understand why it failed
 
 | Code | Fix | How |
@@ -52,3 +57,4 @@ improves all three simultaneously except genuine signal improvement.
 - `metrics.py` — `compute_all_metrics()`, `validate()`, `decide_keep_discard()`
 - `gate.py` — `validate_strategy()` (CSV in → PASS/FAIL out)
 - `profiles/` — YAML threshold configs (crypto_daily, equity_daily, hft)
+- `deferred_registry.yaml` — removed/deferred gates, metrics, and profile keys
