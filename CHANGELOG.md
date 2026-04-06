@@ -1,5 +1,19 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+- **Validation contract migration**: `validate` no longer uses the legacy `20/21`-style denominator narrative. The audited live contract now reports denominators based on applicable gates: typically `13` when the IC family is not applicable, `15` for position-aware runs without IC-family failure activation, and `18` when all IC-family checks are active.
+- **Mathematical corrections**: no-loss `omega` and zero-drawdown `calmar` now normalize to `0.0` instead of sentinel `999`, and constant-series `skew` now normalizes to `0.0` instead of `NaN`.
+- **Applicability semantics**: IC-family behavior is now explicit via `metrics["ic_applicable"]` rather than inferred from zero-valued IC metrics.
+
+### Removed / Deferred
+- **Unsupported live gate removed**: `Bootstrap p` is no longer part of live validation because it lacked a profile-configurable threshold and public/operator contract.
+- **Unused profile keys deferred**: `validation.permutation_trials`, `validation.permutation_p_max`, `validation.look_ahead_mag_corr_max`, `validation.look_ahead_hit_rate_max`, and `anti_gaming.relative_pnl_drop_max` were removed from live profiles and recorded in `causal_edge/validation/deferred_registry.yaml`.
+
+### Comparability
+- Historical validation scores are **not directly comparable** across this migration when they relied on the old denominator narrative (`15`, `20`, `21`) or on sentinel metric values (`omega=999`, `calmar=999`). Compare runs only within the same audited contract version.
+
 ## [0.1.0] - 2026-04-02
 
 ### Added

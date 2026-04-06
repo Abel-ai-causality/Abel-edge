@@ -87,6 +87,13 @@ def test_validate_empty():
         assert "No strategies" in result.output
 
 
+def test_validate_csv_missing_file():
+    runner = CliRunner()
+    result = runner.invoke(main, ["validate", "--csv", "missing.csv"])
+    assert result.exit_code != 0
+    assert "CSV not found: missing.csv" in result.output
+
+
 def test_discover_ethusd_parents(monkeypatch, tmp_path):
     class StubClient:
         def ensure_api_key(self, *, env_path=".env"):

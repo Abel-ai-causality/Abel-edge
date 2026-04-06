@@ -6,6 +6,9 @@ Three leverage-invariant, orthogonal dimensions:
   Shape (Omega)                   — gain/loss asymmetry
 
 No known transformation improves all three except genuine signal improvement.
+
+The audited live validation contract uses applicable-gate denominators
+(commonly 13, 15, or 18) rather than the older fixed 20/21-style narrative.
 """
 
 from causal_edge.validation.metrics import compute_all_metrics, validate

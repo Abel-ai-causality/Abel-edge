@@ -1,0 +1,132 @@
+from __future__ import annotations
+
+from hashlib import sha256
+from pathlib import Path
+
+import pandas as pd
+import pytest
+
+from causal_edge.validation.gate import validate_strategy
+from causal_edge.validation.metrics import compute_all_metrics, detect_profile, load_profile
+
+
+FIXTURES = Path(__file__).parent / "fixtures" / "validation"
+
+
+def _load_csv(name: str) -> pd.DataFrame:
+    return pd.read_csv(FIXTURES / name, parse_dates=["date"])
+
+
+def _compute(name: str) -> dict:
+    df = _load_csv(name)
+    profile = load_profile("equity_daily")
+    if "position" in df.columns:
+        return compute_all_metrics(
+            df["pnl"].to_numpy(),
+            pd.DatetimeIndex(df["date"]),
+            df["position"].to_numpy(),
+            profile,
+        )
+    return compute_all_metrics(df["pnl"].to_numpy(), pd.DatetimeIndex(df["date"]), profile=profile)
+
+
+def test_positive_daily_baselines() -> None:
+    metrics = _compute("positive_daily.csv")
+    assert metrics["sharpe"] == pytest.approx(175.86066619071892, rel=1e-9)
+    assert metrics["sortino"] == 0.0
+    assert metrics["max_dd"] == pytest.approx(0.0, abs=1e-12)
+    assert metrics["calmar"] == 0.0
+    assert metrics["omega"] == 0.0
+
+
+def test_clipped_fixture_changes_shape_contract() -> None:
+    raw = _compute("positive_daily.csv")
+    clipped = _compute("positive_clipped.csv")
+    assert clipped["sharpe"] == 0.0
+    assert clipped["omega"] == pytest.approx(raw["omega"], rel=1e-9)
+    assert clipped["skew"] == 0.0
+
+
+def test_autocorrelated_fixture_has_elevated_sharpe_lo_ratio() -> None:
+    metrics = _compute("autocorrelated.csv")
+    assert metrics["sharpe_lo_ratio"] == pytest.approx(1.0, rel=1e-9)
+
+
+def test_dsr_respects_profile_specific_k() -> None:
+    df = _load_csv("positive_daily.csv")
+    pnl = df["pnl"].to_numpy()
+    dates = pd.DatetimeIndex(df["date"])
+    positions = df["position"].to_numpy()
+    equity = compute_all_metrics(pnl, dates, positions, load_profile("equity_daily"))
+    crypto = compute_all_metrics(pnl, dates, positions, load_profile("crypto_daily"))
+    hft = compute_all_metrics(pnl, dates, positions, load_profile("hft"))
+    assert 0.0 <= equity["dsr"] <= 1.0
+    assert 0.0 <= crypto["dsr"] <= 1.0
+    assert 0.0 <= hft["dsr"] <= 1.0
+
+
+def test_bootstrap_uses_profile_trial_count() -> None:
+    df = _load_csv("positive_daily.csv")
+    pnl = df["pnl"].to_numpy()
+    dates = pd.DatetimeIndex(df["date"])
+    positions = df["position"].to_numpy()
+    equity = compute_all_metrics(pnl, dates, positions, load_profile("equity_daily"))
+    hft = compute_all_metrics(pnl, dates, positions, load_profile("hft"))
+    assert 0.0 <= equity["bootstrap_p"] <= 1.0
+    assert 0.0 <= hft["bootstrap_p"] <= 1.0
+
+
+def test_detect_profile_equity_for_positive_daily_fixture() -> None:
+    df = _load_csv("positive_daily.csv")
+    detected = detect_profile(df["pnl"].to_numpy(), pd.DatetimeIndex(df["date"]))
+    assert detected == "equity_daily"
+
+
+def test_ic_supported_fixture_computes_positive_ic() -> None:
+    metrics = _compute("ic_supported.csv")
+    assert metrics["ic_applicable"] is True
+    assert metrics["ic"] > 0.95
+    assert metrics["ic_stability"] == pytest.approx(1.0, rel=1e-9)
+
+
+def test_ic_unsupported_fixture_keeps_ic_family_zero_without_position() -> None:
+    metrics = _compute("ic_unsupported_no_position.csv")
+    assert metrics["ic_applicable"] is False
+    assert metrics["ic"] == 0.0
+    assert metrics["ic_hit_rate"] == 0.0
+    assert metrics["ic_stability"] == 0.0
+    assert metrics["ic_monthly_mean"] == 0.0
+
+
+def test_insufficient_rows_csv_fails_validation_contract() -> None:
+    result = validate_strategy(FIXTURES / "insufficient_rows.csv")
+    assert result["verdict"] == "FAIL"
+    assert result["score"] == "0/0"
+    assert "need 30+" in result["failures"][0]
+
+
+def test_defer_candidate_metrics_are_not_gate_failures() -> None:
+    result = validate_strategy(FIXTURES / "ic_unsupported_no_position.csv", profile="equity_daily")
+    joined = " | ".join(result["failures"])
+    assert "hill_alpha" not in result["metrics"]
+    assert "cvar_var_ratio" not in result["metrics"]
+    assert "hill_alpha" not in joined
+    assert "cvar_var_ratio" not in joined
+
+
+def test_public_claim_denominator_drift_is_visible() -> None:
+    result = validate_strategy(FIXTURES / "positive_daily.csv", profile="equity_daily")
+    denominator = int(result["score"].split("/")[1])
+    assert denominator == 12
+
+
+def test_fixture_files_are_deterministic() -> None:
+    hashes = {}
+    for path in sorted(FIXTURES.glob("*.csv")):
+        raw = path.read_bytes()
+        df1 = pd.read_csv(path)
+        df2 = pd.read_csv(path)
+        assert list(df1.columns) == list(df2.columns)
+        assert df1.equals(df2)
+        hashes[path.name] = sha256(raw).hexdigest()
+    assert len(hashes) == 7

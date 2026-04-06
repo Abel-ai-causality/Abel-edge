@@ -34,7 +34,3 @@ validation:
   lo_adjusted_min: 0.5
   omega_min: 1.0
   max_dd: -0.15
-  permutation_trials: 200
-  permutation_p_max: 0.01
-  look_ahead_mag_corr_max: 0.10
-  look_ahead_hit_rate_max: 0.90

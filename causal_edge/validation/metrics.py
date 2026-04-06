@@ -63,7 +63,10 @@ def detect_profile(pnl: np.ndarray, dates: pd.DatetimeIndex) -> str:
 
 
 def compute_all_metrics(
-    pnl: np.ndarray, dates: pd.DatetimeIndex, positions: np.ndarray = None
+    pnl: np.ndarray,
+    dates: pd.DatetimeIndex,
+    positions: np.ndarray = None,
+    profile: dict | None = None,
 ) -> dict:
     """Compute all strategy metrics from a PnL array.
 
@@ -89,7 +92,7 @@ def compute_all_metrics(
     sharpe = float(np.mean(pnl) / std * np.sqrt(252)) if std > 0 else 0
     sortino = _sortino(pnl)
     max_dd = float(np.min(dd))
-    calmar = float(cum[-1] / abs(max_dd)) if max_dd != 0 else 999
+    calmar = float(cum[-1] / abs(max_dd)) if max_dd < 0 else 0.0
     total_pnl = float(cum[-1])
 
     # Lo-adjusted Sharpe (serial correlation correction)
@@ -98,7 +101,8 @@ def compute_all_metrics(
     cf = 1 + 2 * sum(rho[k] * (1 - (k + 1) / 252) for k in range(10))
     lo_adjusted = sharpe * np.sqrt(1 / cf) if cf > 0 else sharpe
 
-    dsr = _dsr(pnl, T, K=300)
+    validation_cfg = (profile or {}).get("validation", {})
+    dsr = _dsr(pnl, T, K=validation_cfg.get("dsr_K", 300))
     pbo, oos_sharpes = _cpcv(pnl, n_groups=16)
 
     # OOS/IS (mechanical 50/50 split)
@@ -127,23 +131,23 @@ def compute_all_metrics(
     omega = (
         float(np.sum(gains) / abs(np.sum(losses)))
         if len(losses) > 0 and np.sum(losses) != 0
-        else 999
+        else 0.0
     )
 
     # Tail risk
-    skew = float(sp_stats.skew(pnl))
-    hill_alpha = _hill_estimator(pnl)
+    skew = float(sp_stats.skew(pnl)) if np.std(pnl) > 1e-10 else 0.0
     var_5 = float(np.percentile(pnl, 5))
     cvar_5 = float(np.mean(pnl[pnl <= var_5])) if np.any(pnl <= var_5) else var_5
-    cvar_var_ratio = abs(cvar_5 / var_5) if var_5 != 0 else 1.0
 
     sharpe_lo_ratio = sharpe / lo_adjusted if lo_adjusted > 0 else 999
-    bootstrap_p = _bootstrap_sharpe(pnl, n_boot=1000)
+    bootstrap_p = _bootstrap_sharpe(pnl, n_boot=validation_cfg.get("permutation_trials", 1000))
 
     # IC (Information Coefficient)
     ic, ic_hit_rate, ic_stability, ic_monthly_mean = 0.0, 0.0, 0.0, 0.0
+    ic_applicable = False
     if positions is not None and len(positions) == T:
         ic, ic_hit_rate, ic_stability, ic_monthly_mean = _compute_ic(pnl, positions, dates)
+        ic_applicable = True
 
     active_days = (
         int(np.sum(np.abs(positions) > 0.01))
@@ -165,14 +169,13 @@ def compute_all_metrics(
         "neg_roll_frac": neg_roll_frac,
         "omega": omega,
         "skew": skew,
-        "hill_alpha": hill_alpha,
-        "cvar_var_ratio": cvar_var_ratio,
         "sharpe_lo_ratio": sharpe_lo_ratio,
         "bootstrap_p": bootstrap_p,
         "ic": ic,
         "ic_hit_rate": ic_hit_rate,
         "ic_stability": ic_stability,
         "ic_monthly_mean": ic_monthly_mean,
+        "ic_applicable": ic_applicable,
         "active_days": active_days,
         "total_days": T,
         "yearly_sharpes": yearly_sharpes,
@@ -222,13 +225,12 @@ def validate(metrics: dict, profile: dict) -> tuple[bool, list[str]]:
         failures.append(
             f"Sharpe/Lo {metrics['sharpe_lo_ratio']:.1f} > {ag['sharpe_lo_ratio_max']}"
         )
-    if metrics["ic"] != 0 and metrics["ic"] < ag.get("ic_min", 0.02):
+    if metrics.get("ic_applicable", False) and metrics["ic"] < ag.get("ic_min", 0.02):
         failures.append(f"IC {metrics['ic']:.3f} < {ag['ic_min']}")
-    if metrics["ic_stability"] != 0 and metrics["ic_stability"] < ag.get("ic_stability_min", 0.50):
+    if metrics.get("ic_applicable", False) and metrics["ic_stability"] < ag.get(
+        "ic_stability_min", 0.50
+    ):
         failures.append(f"IC stab {metrics['ic_stability']:.0%} < {ag['ic_stability_min']:.0%}")
-    if metrics["bootstrap_p"] > 0.05:
-        failures.append(f"Bootstrap p={metrics['bootstrap_p']:.3f} > 0.05")
-
     return len(failures) == 0, failures
 
 

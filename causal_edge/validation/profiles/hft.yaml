@@ -20,7 +20,6 @@ anti_gaming:
   sharpe_lo_ratio_max: 5.0       # HFT has minimal serial corr
   ic_min: 0.01
   ic_stability_min: 0.40
-  relative_pnl_drop_max: 0.20
 
 validation:
   dsr_min: 0.90
@@ -32,7 +31,3 @@ validation:
   lo_adjusted_min: 0.0           # Lo not meaningful for tick data
   omega_min: 1.5
   max_dd: -0.05                  # HFT drawdown tolerance very tight
-  permutation_trials: 500        # HFT needs more trials (more noise)
-  permutation_p_max: 0.01
-  look_ahead_mag_corr_max: 0.05  # Tighter for HFT
-  look_ahead_hit_rate_max: 0.85

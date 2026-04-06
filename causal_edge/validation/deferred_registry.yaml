@@ -1,0 +1,117 @@
+schema_version: 1
+description: >
+  Deferred/removal registry for validation metrics, gates, and profile keys that are
+  unsupported, unused, or awaiting quantitative justification. Entries here are not
+  necessarily removed from runtime yet; Task 1 records candidates visible before remediation.
+
+entries:
+  - name: hill_alpha
+    type: metric
+    status: defer-candidate
+    removed_from: []
+    reason: Unused diagnostic tail metric with no live gate consumer or public contract.
+    required_inputs:
+      - pnl lower-tail losses
+    reentry_conditions:
+      - Quantitative definition and estimator choice documented in audit matrix
+      - Runtime consumer and threshold rationale added if promoted to gate
+    docs_updated: false
+
+  - name: cvar_var_ratio
+    type: metric
+    status: defer-candidate
+    removed_from: []
+    reason: Unused diagnostic ratio with no profile threshold and no public documentation.
+    required_inputs:
+      - pnl
+    reentry_conditions:
+      - Explicit contract need documented
+      - Baseline tests and threshold policy defined
+    docs_updated: false
+
+  - name: validation.permutation_trials
+    type: profile_key
+    status: deferred
+    removed_from:
+      - causal_edge/validation/profiles/equity_daily.yaml
+      - causal_edge/validation/profiles/crypto_daily.yaml
+      - causal_edge/validation/profiles/hft.yaml
+    reason: Present in YAML profiles but not consumed by runtime validation logic.
+    required_inputs:
+      - permutation test design
+    reentry_conditions:
+      - Runtime consumer added
+      - Gate/report semantics defined and tested
+    docs_updated: false
+
+  - name: validation.permutation_p_max
+    type: profile_key
+    status: deferred
+    removed_from:
+      - causal_edge/validation/profiles/equity_daily.yaml
+      - causal_edge/validation/profiles/crypto_daily.yaml
+      - causal_edge/validation/profiles/hft.yaml
+    reason: Present in YAML profiles but not consumed by runtime validation logic.
+    required_inputs:
+      - permutation test outputs
+    reentry_conditions:
+      - Runtime consumer added
+      - Threshold rationale documented
+    docs_updated: false
+
+  - name: validation.look_ahead_mag_corr_max
+    type: profile_key
+    status: deferred
+    removed_from:
+      - causal_edge/validation/profiles/equity_daily.yaml
+      - causal_edge/validation/profiles/crypto_daily.yaml
+      - causal_edge/validation/profiles/hft.yaml
+    reason: Present in YAML profiles but no runtime look-ahead audit currently consumes it.
+    required_inputs:
+      - feature/label leakage diagnostics
+    reentry_conditions:
+      - Leakage metric formally defined
+      - Runtime consumer and tests added
+    docs_updated: false
+
+  - name: validation.look_ahead_hit_rate_max
+    type: profile_key
+    status: deferred
+    removed_from:
+      - causal_edge/validation/profiles/equity_daily.yaml
+      - causal_edge/validation/profiles/crypto_daily.yaml
+      - causal_edge/validation/profiles/hft.yaml
+    reason: Present in YAML profiles but no runtime look-ahead audit currently consumes it.
+    required_inputs:
+      - hit-rate leakage diagnostic
+    reentry_conditions:
+      - Leakage metric formally defined
+      - Runtime consumer and tests added
+    docs_updated: false
+
+  - name: anti_gaming.relative_pnl_drop_max
+    type: profile_key
+    status: deferred
+    removed_from:
+      - causal_edge/validation/profiles/hft.yaml
+    reason: HFT profile key exists but no runtime consumer was found.
+    required_inputs:
+      - comparative pnl baseline
+    reentry_conditions:
+      - Runtime consumer added
+      - Product-policy semantics documented
+    docs_updated: false
+
+  - name: bootstrap_p_gate
+    type: gate
+    status: deferred
+    removed_from:
+      - causal_edge/validation/metrics.py
+    reason: Removed from live validation because threshold and public/profile contract were unsupported.
+    required_inputs:
+      - pnl
+      - bootstrap methodology
+    reentry_conditions:
+      - Threshold must be made profile-configurable
+      - Public/operator contract and test semantics must be documented
+    docs_updated: false
