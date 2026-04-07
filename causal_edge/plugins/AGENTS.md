@@ -12,6 +12,11 @@ Optional integrations. Removing this entire directory must not break anything.
 4. Copy the output YAML into your `strategies.yaml`
 5. No API key? Fill `parents:` manually — framework works identically
 
+### Align Abel price APIs
+- Default real-price source is Abel market data
+- See `docs/abel-price-api.md` for the request/response contract
+- Current planned endpoint: `POST /api/market/day_bar`
+
 ### Understand plugin isolation
 - Framework uses `try/except ImportError` to detect plugins, not registry
 - No plugin code is imported at framework startup

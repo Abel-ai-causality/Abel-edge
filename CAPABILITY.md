@@ -27,6 +27,9 @@ result = validate_strategy("backtest.csv")  # needs: date, pnl columns
 
 Or CLI: `causal-edge validate --csv backtest.csv --verbose`
 
+For real-price strategies, `causal-edge run` now defaults to Abel price APIs.
+Set `price_data.source: csv` on a strategy to use a local bars CSV instead.
+
 ## 3. Diagnose + Fix
 
 When validation fails, apply fixes, revalidate, repeat until stable.

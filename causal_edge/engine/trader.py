@@ -8,6 +8,7 @@ import click
 import numpy as np
 
 from causal_edge.engine.ledger import write_trade_log
+from causal_edge.engine.price_data import resolve_price_config
 
 
 def _load_engine(engine_path: str):
@@ -29,7 +30,7 @@ def _load_engine(engine_path: str):
     )
 
 
-def run_one(strategy_cfg: dict) -> dict:
+def run_one(strategy_cfg: dict, *, settings: dict | None = None, bars_loader=None) -> dict:
     """Run a single strategy and write its trade log.
 
     Args:
@@ -45,6 +46,11 @@ def run_one(strategy_cfg: dict) -> dict:
     click.echo(f"  Running {sid}...")
     engine_cls = _load_engine(engine_path)
     engine = engine_cls(context=strategy_cfg)
+    if bars_loader is not None:
+        engine.bind_price_loader(
+            bars_loader,
+            resolve_price_config(settings or {}, strategy_cfg),
+        )
 
     positions, dates, returns, prices = engine.compute_signals()
 
@@ -60,7 +66,7 @@ def run_one(strategy_cfg: dict) -> dict:
     return {"id": sid, "n_days": len(dates), "trade_log": trade_log_path}
 
 
-def run_all(config: dict, strategy_id: str | None = None) -> list[dict]:
+def run_all(config: dict, strategy_id: str | None = None, bars_loader=None) -> list[dict]:
     """Run all strategies (or one specific strategy) from config.
 
     Args:
@@ -81,7 +87,7 @@ def run_all(config: dict, strategy_id: str | None = None) -> list[dict]:
 
     results = []
     for s_cfg in strategies:
-        result = run_one(s_cfg)
+        result = run_one(s_cfg, settings=config.get("settings"), bars_loader=bars_loader)
         results.append(result)
         click.echo(f"    → {result['n_days']} days written to {result['trade_log']}")
 

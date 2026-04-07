@@ -81,6 +81,9 @@ settings:
   capital: 100000
   port: 8080
   theme: dark
+  price_data:
+    default_source: abel
+    default_timeframe: 1d
 
 strategies:
   - id: sma_crossover
@@ -109,6 +112,9 @@ _ENV_EXAMPLE = """\
 # Abel CAP API key (optional — for causal discovery)
 # Get one at https://abel.ai
 # ABEL_API_KEY=your_key_here
+
+# Optional: point real-price strategies at a local CSV instead of Abel
+# PRICE_DATA_SOURCE=csv
 """
 
 _CLAUDE_MD = """\
