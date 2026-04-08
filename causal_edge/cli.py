@@ -220,10 +220,6 @@ def status(config):
         click.echo(f"  {s['name']:20s}  {s['asset']:6s}  {s.get('badge', '?')}")
 
 
-if __name__ == "__main__":
-    main()
-
-
 def _build_bars_loader(cfg: dict):
     strategies = cfg.get("strategies") or []
     if not strategies:
@@ -264,3 +260,7 @@ def _dispatch_bars_loader(cfg: dict):
         raise click.ClickException(f"Unsupported price_data.source '{source}'.")
 
     return _loader
+
+
+if __name__ == "__main__":
+    main()
