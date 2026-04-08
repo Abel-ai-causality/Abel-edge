@@ -135,3 +135,65 @@ def test_causal_demo_realistic_csv_mapping_demo(tmp_path):
     ).to_csv(price_path, index=False)
     df = pd.read_csv(price_path)
     assert resolve_price_column(df, "price") == "close"
+
+
+def test_fetch_bars_uses_market_sit_base_url():
+    class StubSession:
+        def __init__(self):
+            self.calls = []
+
+        def post(self, url, json=None, headers=None, timeout=20):
+            self.calls.append({"url": url, "json": json, "headers": headers, "timeout": timeout})
+            return StubResponse({"data": []})
+
+    class StubResponse:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self.payload
+
+    session = StubSession()
+    client = AbelClient(session=session)
+    client.fetch_bars(
+        symbols=["ETHUSD"],
+        start=None,
+        end=None,
+        timeframe="1d",
+        limit=10,
+        fields=None,
+        api_key="abel_test",
+    )
+
+    assert session.calls[0]["url"] == "https://cap-sit.abel.ai/api/market/day_bar"
+    assert session.calls[0]["json"]["symbols"] == ["ETHUSD"]
+
+
+def test_discover_uses_cap_sit_base_url():
+    class StubSession:
+        def __init__(self):
+            self.calls = []
+
+        def post(self, url, json=None, headers=None, timeout=20):
+            self.calls.append({"url": url, "json": json, "headers": headers, "timeout": timeout})
+            return StubResponse({"result": []})
+
+    class StubResponse:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self.payload
+
+    session = StubSession()
+    client = AbelClient(session=session)
+    client.discover_parents(node_id="ETHUSD", limit=5, api_key="abel_test")
+
+    assert session.calls[0]["url"] == "https://cap-sit.abel.ai/api/cap"
+    assert session.calls[0]["json"]["verb"] == "traverse.parents"

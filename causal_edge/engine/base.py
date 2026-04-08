@@ -11,6 +11,8 @@ from abc import ABC, abstractmethod
 import numpy as np
 import pandas as pd
 
+from causal_edge.engine.price_data import normalize_bars
+
 
 class StrategyEngine(ABC):
     """Base class for all strategy engines.
@@ -22,6 +24,38 @@ class StrategyEngine(ABC):
 
     def __init__(self, context: dict | None = None) -> None:
         self.context = context
+        self._bars_loader = None
+        self._price_data_config = {}
+
+    def bind_price_loader(self, loader, price_data_config: dict | None = None) -> None:
+        self._bars_loader = loader
+        self._price_data_config = price_data_config or {}
+
+    def load_bars(
+        self,
+        symbols: list[str] | None = None,
+        *,
+        start=None,
+        end=None,
+        timeframe: str | None = None,
+        limit: int | None = None,
+        fields: list[str] | None = None,
+    ) -> pd.DataFrame:
+        if self._bars_loader is None:
+            raise RuntimeError("Price loader is not configured for this engine.")
+        resolved_symbols = symbols or [
+            self._price_data_config.get("symbol") or self.context.get("asset")
+        ]
+        df = self._bars_loader(
+            symbols=resolved_symbols,
+            start=start,
+            end=end,
+            timeframe=timeframe or self._price_data_config.get("timeframe", "1d"),
+            limit=limit or self._price_data_config.get("limit"),
+            fields=fields,
+            config=self._price_data_config,
+        )
+        return normalize_bars(df)
 
     @abstractmethod
     def compute_signals(

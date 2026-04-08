@@ -27,19 +27,27 @@ class ETHUSDCausalEngine(StrategyEngine):
 
     def compute_signals(self):
         components = [self._normalize_component(item) for item in self.graph.get("parents", [])]
-        rng = np.random.default_rng(seed=77)
-        target_ret = rng.normal(0.0008, 0.03, self.n_days)
-        target_prices = 2500.0 * np.exp(np.cumsum(target_ret))
-        dates = pd.bdate_range(end="2026-01-01", periods=self.n_days)
+        symbols = [self.context.get("asset", "ETHUSD")] + [comp["ticker"] for comp in components]
+        bars = self.load_bars(symbols=symbols, limit=self.n_days)
+
+        target_symbol = symbols[0]
+        target = bars[bars["symbol"] == target_symbol].copy()
+        if len(target) < 30:
+            raise ValueError(f"Not enough price data for {target_symbol}: need 30+ bars.")
+
+        target = target.sort_values("timestamp").tail(self.n_days)
+        target_prices = target["close"].astype(float).to_numpy()
+        dates = pd.DatetimeIndex(target["timestamp"])
+        target_ret = pd.Series(target_prices).pct_change().fillna(0.0).to_numpy()
 
         sig_matrix = []
         for comp in components:
             tau = comp["lag"]
             win = comp["window"]
-            noise = rng.normal(0, 0.018, self.n_days)
-            signal = np.zeros(self.n_days)
-            signal[: self.n_days - tau] = target_ret[tau:] * 0.18
-            ret = pd.Series(signal + noise)
+            comp_bars = bars[bars["symbol"] == comp["ticker"]].copy()
+            comp_bars = comp_bars.sort_values("timestamp")
+            aligned = comp_bars.set_index("timestamp")["close"].reindex(dates).ffill().bfill()
+            ret = aligned.pct_change().fillna(0.0)
             if win > 1:
                 sig = np.sign(ret.rolling(win).sum().shift(tau)).values
             else:

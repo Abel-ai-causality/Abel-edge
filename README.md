@@ -100,6 +100,9 @@ causal-edge validate --export r.txt  # export report for sharing
 causal-edge discover <TICKER>        # find causal parents (Abel API key)
 ```
 
+Real-price strategies default to Abel price APIs. Override per strategy with
+`price_data.source: csv` to load local bar data instead.
+
 ## Architecture
 
 ```

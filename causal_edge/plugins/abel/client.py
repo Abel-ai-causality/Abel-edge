@@ -10,8 +10,8 @@ from typing import Any
 
 import requests
 
-DEFAULT_OAUTH_BASE_URL = "https://api.abel.ai/echo"
-DEFAULT_CAP_BASE_URL = "https://cap.abel.ai/api"
+DEFAULT_OAUTH_BASE_URL = "https://api-sit.abel.ai/echo"
+DEFAULT_CAP_BASE_URL = "https://cap-sit.abel.ai/api"
 CRYPTO_ALIASES = {"BTC", "ETH", "SOL", "XRP", "DOGE", "ADA", "AVAX"}
 SUPPORTED_FIELDS = {"price", "volume"}
 
@@ -146,6 +146,37 @@ class AbelClient:
         )
         return _extract_items(payload)
 
+    def fetch_bars(
+        self,
+        *,
+        symbols: list[str],
+        start: str | None,
+        end: str | None,
+        timeframe: str,
+        limit: int | None,
+        fields: list[str] | None,
+        api_key: str,
+    ) -> Any:
+        payload = self._post_market(
+            endpoint="day_bar",
+            body={
+                "symbols": [
+                    normalize_public_node_id(symbol, default_field="price").split(".")[0]
+                    for symbol in symbols
+                ],
+                "start": start,
+                "end": end,
+                "timeframe": timeframe,
+                "limit": limit,
+                "fields": fields or ["open", "high", "low", "close", "volume"],
+            },
+            api_key=api_key,
+        )
+        items = payload.get("data") or payload.get("result") or []
+        if isinstance(items, dict):
+            items = items.get("items") or items.get("bars") or []
+        return items
+
     def _authorize_agent(self) -> dict[str, Any]:
         response = self.session.get(
             f"{self.oauth_base_url}/web/credentials/oauth/google/authorize/agent", timeout=20
@@ -200,6 +231,23 @@ class AbelClient:
         response = self.session.post(
             f"{self.cap_base_url}/cap",
             json={"verb": verb, "params": params},
+            headers=headers,
+            timeout=20,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def _post_market(self, *, endpoint: str, body: dict[str, Any], api_key: str) -> dict[str, Any]:
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "Authorization": api_key
+            if api_key.lower().startswith("bearer ")
+            else f"Bearer {api_key}",
+        }
+        response = self.session.post(
+            f"{self.cap_base_url}/market/{endpoint}",
+            json=body,
             headers=headers,
             timeout=20,
         )

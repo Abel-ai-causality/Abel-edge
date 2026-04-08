@@ -43,6 +43,10 @@ strategies:
     color: "#FF2D55"
     engine: strategies.my_strategy.engine
     trade_log: "data/trade_log_my_strategy.csv"
+    # Optional: default live price source is Abel. Override with CSV if needed.
+    # price_data:
+    #   source: csv
+    #   path: data/prices.csv
 ```
 
 4. Verify:
@@ -60,6 +64,7 @@ Your engine must implement `StrategyEngine` from `causal_edge/engine/base.py`:
 ```python
 class MyEngine(StrategyEngine):
     def compute_signals(self):
+        # Optional: load price bars via self.load_bars()
         # Returns: (positions, dates, returns, prices)
         # positions: np.ndarray of daily position sizes (0=flat, 1=long)
         # dates: pd.DatetimeIndex

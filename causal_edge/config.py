@@ -14,6 +14,10 @@ DEFAULTS: dict[str, Any] = {
     "port": 8088,
     "refresh_seconds": 300,
     "theme": "dark",
+    "price_data": {
+        "default_source": "abel",
+        "default_timeframe": "1d",
+    },
 }
 
 REQUIRED_STRATEGY_FIELDS = ("id", "name", "asset", "color", "engine", "trade_log")
@@ -53,6 +57,22 @@ def _validate_strategy(strategy: dict, index: int) -> None:
                 f"Add '{field}' to the strategy entry in strategies.yaml."
             )
 
+    price_data = strategy.get("price_data")
+    if price_data is not None:
+        _validate_price_data(price_data, scope=f"strategy '{strategy.get('id', index)}'")
+
+
+def _validate_price_data(price_data: Any, *, scope: str) -> None:
+    if not isinstance(price_data, dict):
+        raise ValueError(f"{scope} price_data must be a mapping.")
+
+    source = price_data.get("source")
+    if source is not None and source not in {"abel", "csv"}:
+        raise ValueError(f"{scope} price_data.source must be 'abel' or 'csv', got '{source}'.")
+
+    if source == "csv" and not price_data.get("path"):
+        raise ValueError(f"{scope} price_data.path is required when source='csv'.")
+
 
 def load_config(path: str | Path | None = None) -> dict[str, Any]:
     """Load strategies.yaml configuration.
@@ -88,6 +108,9 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
     settings = {**DEFAULTS, **user_settings}
     settings = _expand_env_recursive(settings)
     strategies = _expand_env_recursive(raw.get("strategies") or [])
+
+    if "price_data" in settings:
+        _validate_price_data(settings["price_data"], scope="settings")
 
     for i, strat in enumerate(strategies):
         _validate_strategy(strat, i)

@@ -7,6 +7,8 @@ from pathlib import Path
 
 import click
 
+from causal_edge.engine.price_data import load_bars_from_csv, resolve_price_config
+
 
 def _get_version() -> str:
     """Return installed package version, or fall back to source version."""
@@ -70,8 +72,10 @@ def run(strategy, config):
         click.echo("No strategies configured. Add strategies to strategies.yaml.")
         return
 
+    bars_loader = _build_bars_loader(cfg)
+
     click.echo(f"Running {len(cfg['strategies'])} strategies...")
-    results = run_all(cfg, strategy_id=strategy)
+    results = run_all(cfg, strategy_id=strategy, bars_loader=bars_loader)
     click.echo(f"Done. {len(results)} strategies executed.")
 
 
@@ -218,6 +222,48 @@ def status(config):
     click.echo(f"Strategies: {len(cfg['strategies'])}")
     for s in cfg["strategies"]:
         click.echo(f"  {s['name']:20s}  {s['asset']:6s}  {s.get('badge', '?')}")
+
+
+def _build_bars_loader(cfg: dict):
+    strategies = cfg.get("strategies") or []
+    if not strategies:
+        return None
+
+    default_source = (
+        (cfg.get("settings") or {}).get("price_data", {}).get("default_source", "abel")
+    )
+    if any(
+        (resolve_price_config(cfg.get("settings") or {}, s).get("source") == "csv")
+        for s in strategies
+    ):
+        return _dispatch_bars_loader(cfg)
+    if default_source == "abel":
+        return _dispatch_bars_loader(cfg)
+    return None
+
+
+def _dispatch_bars_loader(cfg: dict):
+    def _loader(**kwargs):
+        config = kwargs.get("config") or {}
+        source = config.get("source") or (cfg.get("settings") or {}).get("price_data", {}).get(
+            "default_source", "abel"
+        )
+        if source == "csv":
+            path = config.get("path")
+            if not path:
+                raise click.ClickException("price_data.path is required when source='csv'.")
+            return load_bars_from_csv(path, **kwargs)
+        if source == "abel":
+            try:
+                from causal_edge.plugins.abel.prices import fetch_bars
+            except ImportError as e:
+                raise click.ClickException(
+                    "Abel price source is unavailable. See: causal_edge/plugins/AGENTS.md"
+                ) from e
+            return fetch_bars(**kwargs)
+        raise click.ClickException(f"Unsupported price_data.source '{source}'.")
+
+    return _loader
 
 
 if __name__ == "__main__":
