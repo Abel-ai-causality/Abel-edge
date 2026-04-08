@@ -20,7 +20,7 @@ def fetch_bars(
 ) -> pd.DataFrame:
     abel = client or AbelClient()
     api_key = abel.ensure_api_key(env_path=(config or {}).get("env_path", ".env"))
-    return abel.fetch_bars(
+    payload = abel.fetch_bars(
         symbols=symbols,
         start=start,
         end=end,
@@ -29,3 +29,4 @@ def fetch_bars(
         fields=fields,
         api_key=api_key,
     )
+    return pd.DataFrame(payload)

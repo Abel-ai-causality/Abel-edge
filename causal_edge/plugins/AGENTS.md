@@ -15,7 +15,10 @@ Optional integrations. Removing this entire directory must not break anything.
 ### Align Abel price APIs
 - Default real-price source is Abel market data
 - See `docs/abel-price-api.md` for the request/response contract
-- Current planned endpoint: `POST /api/market/day_bar`
+- Abel currently uses the SIT stack for both graph discovery and market data
+- OAuth base: `https://api-sit.abel.ai/echo`
+- CAP endpoint: `POST https://cap-sit.abel.ai/api/cap`
+- Market endpoint: `POST https://cap-sit.abel.ai/api/market/day_bar`
 
 ### Understand plugin isolation
 - Framework uses `try/except ImportError` to detect plugins, not registry

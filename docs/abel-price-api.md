@@ -9,9 +9,15 @@ database tables or SQL details in user config.
 
 ## Endpoint
 
-- Method: `POST`
-- URL: `https://cap.abel.ai/api/market/day_bar`
+- Current default environment: Abel SIT
+- OAuth base: `https://api-sit.abel.ai/echo`
+- CAP graph endpoint: `POST https://cap-sit.abel.ai/api/cap`
+- Market bars endpoint: `POST https://cap-sit.abel.ai/api/market/day_bar`
 - Auth header: `Authorization: Bearer <ABEL_API_KEY>`
+
+Notes:
+- `causal-edge` currently uses Abel SIT for both graph discovery and market data
+- Production endpoints can be restored later as a single environment switch
 
 ## Request Shape
 
