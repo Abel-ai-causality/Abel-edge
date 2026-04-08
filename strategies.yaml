@@ -19,6 +19,9 @@ settings:
   capital: 100000
   port: 8088
   theme: dark
+  price_data:
+    default_source: abel
+    default_timeframe: 1d
 
 strategies:
   - id: ethusd_causal
