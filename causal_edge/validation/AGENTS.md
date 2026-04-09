@@ -12,7 +12,7 @@ Three leverage-invariant dimensions:
 
 ### Contract notes
 - The audited live validation contract uses applicable-gate denominators rather than legacy `20/21` score narratives.
-- Typical denominators are `10` when the IC family is not applicable and `12` when the IC family is applicable.
+- Typical denominators are `9` when the IC family is not applicable and `11` when the IC family is applicable.
 - Deferred/removed gates and profile keys are tracked in `causal_edge/validation/deferred_registry.yaml`.
 
 ### Understand why it failed
@@ -21,7 +21,6 @@ Three leverage-invariant dimensions:
 |------|-----|-----|
 | T6 DSR | Reduce trials | Fewer param combos in grid search. K<50 ideal |
 | T7 PBO | Simplify model | Fewer features, shallower trees: `max_depth=3` |
-| T12 OOS/IS | Regularize | Shorter train window: `window=126` not `504` |
 | T13 NegRoll | Add trend filter | `if price < sma_50: position = 0` |
 | T14 LossYrs | Check signal decay | Plot rolling Sharpe — is alpha disappearing? |
 | T15-Lo | Fix serial corr | Persistence penalty: `pos[t] *= max(0.3, 1-0.1*hold_days)` |

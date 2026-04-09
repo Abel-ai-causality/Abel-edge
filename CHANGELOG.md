@@ -3,11 +3,13 @@
 ## [Unreleased]
 
 ### Changed
-- **Validation contract migration**: `validate` no longer uses the legacy `20/21`-style denominator narrative. The audited live contract now reports denominators based on applicable gates: typically `13` when the IC family is not applicable, `15` for position-aware runs without IC-family failure activation, and `18` when all IC-family checks are active.
+- **Validation contract migration**: `validate` no longer uses the legacy `20/21`-style denominator narrative. The audited live contract now reports denominators based on applicable gates: typically `9` when the IC family is not applicable and `11` when the IC family is applicable.
 - **Mathematical corrections**: no-loss `omega` and zero-drawdown `calmar` now normalize to `0.0` instead of sentinel `999`, and constant-series `skew` now normalizes to `0.0` instead of `NaN`.
 - **Applicability semantics**: IC-family behavior is now explicit via `metrics["ic_applicable"]` rather than inferred from zero-valued IC metrics.
 
 ### Removed / Deferred
+- **Unsupported live gate removed**: `T12 OOS/IS` and its split-Sharpe payload family (`oos_is`, `is_sharpe`, `oos_sharpe`) were removed because a final PnL path does not carry defensible IS/OOS provenance.
+- **Orphaned profile key deferred**: `validation.oos_is_min` was removed from live profiles and recorded in `causal_edge/validation/deferred_registry.yaml`.
 - **Unsupported live gate removed**: `Bootstrap p` is no longer part of live validation because it lacked a profile-configurable threshold and public/operator contract.
 - **Unused profile keys deferred**: `validation.permutation_trials`, `validation.permutation_p_max`, `validation.look_ahead_mag_corr_max`, `validation.look_ahead_hit_rate_max`, and `anti_gaming.relative_pnl_drop_max` were removed from live profiles and recorded in `causal_edge/validation/deferred_registry.yaml`.
 
@@ -18,7 +20,7 @@
 
 ### Added
 - **Framework core**: StrategyEngine ABC, config loader, CLI (init/run/dashboard/validate/discover/status)
-- **Abel Proof validation**: 15-test gate with anti-gaming metric triangle (Lo-adjusted Sharpe, IC, Omega)
+- **Abel Proof validation**: initial validation gate with anti-gaming metric triangle (Lo-adjusted Sharpe, IC, Omega)
 - **Dashboard**: Dark-theme static HTML with Plotly equity curves and position charts
 - **3 demo strategies**: SMA crossover (simple), Momentum ML (walk-forward GBDT), Causal Voting (Abel graph)
 - **Causal demo**: Bundled TON causal graph (5 parents + 3 children from Abel), vote² sizing, conviction threshold

@@ -11,7 +11,7 @@ Strategy engine implementations. Each is a directory with an engine.py implement
 3. Create strategies/my_strategy/engine.py implementing `StrategyEngine`
 4. Add entry to root `strategies.yaml` with `engine: strategies.my_strategy.engine`
 5. `make test` — `TestEngineModuleImportable` verifies import works
-6. `causal-edge validate` — runs Abel Proof 15-test gate
+6. `causal-edge validate` — runs the Abel Proof audited live gate contract
 
 ### Use the SMA example as template
     cp -r examples/sma_crossover/ strategies/my_strategy/

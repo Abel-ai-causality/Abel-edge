@@ -103,13 +103,7 @@ def compute_all_metrics(
 
     validation_cfg = (profile or {}).get("validation", {})
     dsr = _dsr(pnl, T, K=validation_cfg.get("dsr_K", 300))
-    pbo, oos_sharpes = _cpcv(pnl, n_groups=16)
-
-    # OOS/IS (mechanical 50/50 split)
-    mid = T // 2
-    is_sh = _sharpe(pnl[:mid])
-    oos_sh = _sharpe(pnl[mid:])
-    oos_is = oos_sh / is_sh if is_sh != 0 else 0
+    pbo, _ = _cpcv(pnl, n_groups=16)
 
     # Year-by-year stability
     loss_years = 0
@@ -164,7 +158,6 @@ def compute_all_metrics(
         "calmar": calmar,
         "dsr": dsr,
         "pbo": pbo,
-        "oos_is": oos_is,
         "loss_years": loss_years,
         "neg_roll_frac": neg_roll_frac,
         "omega": omega,
@@ -179,8 +172,6 @@ def compute_all_metrics(
         "active_days": active_days,
         "total_days": T,
         "yearly_sharpes": yearly_sharpes,
-        "is_sharpe": is_sh,
-        "oos_sharpe": oos_sh,
     }
 
 
@@ -199,8 +190,6 @@ def validate(metrics: dict, profile: dict) -> tuple[bool, list[str]]:
         failures.append(f"T6 DSR {metrics['dsr']:.1%} < {v['dsr_min']:.0%}")
     if metrics["pbo"] > v.get("pbo_max", 0.10):
         failures.append(f"T7 PBO {metrics['pbo']:.1%} > {v['pbo_max']:.0%}")
-    if abs(metrics["oos_is"]) < v.get("oos_is_min", 0.50):
-        failures.append(f"T12 OOS/IS {metrics['oos_is']:.2f} < {v['oos_is_min']}")
     if metrics["neg_roll_frac"] > v.get("neg_roll_frac_max", 0.15):
         failures.append(
             f"T13 NegRoll {metrics['neg_roll_frac']:.0%} > {v['neg_roll_frac_max']:.0%}"

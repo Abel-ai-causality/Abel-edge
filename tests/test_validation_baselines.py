@@ -117,7 +117,14 @@ def test_defer_candidate_metrics_are_not_gate_failures() -> None:
 def test_public_claim_denominator_drift_is_visible() -> None:
     result = validate_strategy(FIXTURES / "positive_daily.csv", profile="equity_daily")
     denominator = int(result["score"].split("/")[1])
-    assert denominator == 12
+    assert denominator == 11
+
+
+def test_removed_oos_family_metrics_are_not_in_payload() -> None:
+    metrics = _compute("positive_daily.csv")
+    assert "oos_is" not in metrics
+    assert "is_sharpe" not in metrics
+    assert "oos_sharpe" not in metrics
 
 
 def test_fixture_files_are_deterministic() -> None:

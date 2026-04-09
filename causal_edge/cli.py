@@ -164,7 +164,6 @@ def validate(strategy, verbose, csv_path, export_path, config):
                     "calmar",
                     "dsr",
                     "pbo",
-                    "oos_is",
                     "omega",
                     "ic",
                     "ic_hit_rate",

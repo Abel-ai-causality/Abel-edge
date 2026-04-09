@@ -128,7 +128,7 @@ _CLAUDE_MD = """\
 ## Commands
 causal-edge run         # run strategies, write trade logs
 causal-edge dashboard   # generate dashboard.html
-causal-edge validate    # Abel Proof 15-test validation
+causal-edge validate    # Abel Proof audited validation
 causal-edge status      # show strategy summary
 """
 

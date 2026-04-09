@@ -154,7 +154,6 @@ class TestComputeAllMetrics:
             "calmar",
             "dsr",
             "pbo",
-            "oos_is",
             "loss_years",
             "neg_roll_frac",
             "omega",
@@ -169,8 +168,6 @@ class TestComputeAllMetrics:
             "active_days",
             "total_days",
             "yearly_sharpes",
-            "is_sharpe",
-            "oos_sharpe",
         ]
         for key in required_keys:
             assert key in m, f"Missing key: {key}"

@@ -29,6 +29,48 @@ entries:
       - Baseline tests and threshold policy defined
     docs_updated: false
 
+  - name: oos_is
+    type: metric
+    status: deferred
+    removed_from:
+      - causal_edge/validation/metrics.py
+    reason: Removed from the live payload because a final PnL path does not establish defensible in-sample/out-of-sample provenance.
+    required_inputs:
+      - pnl
+      - explicit train/test or fold boundaries
+    reentry_conditions:
+      - Runtime receives explicit split metadata rather than inferring halves
+      - Re-entry semantics and thresholds are documented and tested
+    docs_updated: true
+
+  - name: is_sharpe
+    type: metric
+    status: deferred
+    removed_from:
+      - causal_edge/validation/metrics.py
+    reason: Removed with the OOS/IS family because split-half Sharpe diagnostics no longer have a live contract consumer.
+    required_inputs:
+      - pnl
+      - explicit train/test or fold boundaries
+    reentry_conditions:
+      - OOS-style contract is reintroduced with explicit provenance
+      - Diagnostic role is documented and tested
+    docs_updated: true
+
+  - name: oos_sharpe
+    type: metric
+    status: deferred
+    removed_from:
+      - causal_edge/validation/metrics.py
+    reason: Removed with the OOS/IS family because split-half Sharpe diagnostics no longer have a live contract consumer.
+    required_inputs:
+      - pnl
+      - explicit train/test or fold boundaries
+    reentry_conditions:
+      - OOS-style contract is reintroduced with explicit provenance
+      - Diagnostic role is documented and tested
+    docs_updated: true
+
   - name: validation.permutation_trials
     type: profile_key
     status: deferred
@@ -43,6 +85,21 @@ entries:
       - Runtime consumer added
       - Gate/report semantics defined and tested
     docs_updated: false
+
+  - name: validation.oos_is_min
+    type: profile_key
+    status: deferred
+    removed_from:
+      - causal_edge/validation/profiles/equity_daily.yaml
+      - causal_edge/validation/profiles/crypto_daily.yaml
+      - causal_edge/validation/profiles/hft.yaml
+    reason: Orphaned by removal of the T12 OOS/IS gate from the live validation contract.
+    required_inputs:
+      - explicit OOS/IS metric contract
+    reentry_conditions:
+      - OOS-style gate is reintroduced with defensible semantics
+      - Threshold rationale is documented and tested
+    docs_updated: true
 
   - name: validation.permutation_p_max
     type: profile_key
@@ -115,3 +172,17 @@ entries:
       - Threshold must be made profile-configurable
       - Public/operator contract and test semantics must be documented
     docs_updated: false
+
+  - name: T12 OOS/IS
+    type: gate
+    status: deferred
+    removed_from:
+      - causal_edge/validation/metrics.py
+    reason: Removed from live validation because a final PnL path could not justify a true in-sample/out-of-sample gate, and the prior half-split implementation had sign-semantic flaws.
+    required_inputs:
+      - explicit train/test or fold boundaries
+      - documented OOS retention semantics
+    reentry_conditions:
+      - Split provenance is provided to runtime
+      - Gate definition and threshold policy are documented and tested
+    docs_updated: true

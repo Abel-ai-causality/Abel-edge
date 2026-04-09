@@ -8,7 +8,7 @@ Already have a CSV with `date` and `pnl` columns? Skip everything — just valid
 causal-edge validate --csv my_backtest.csv
 ```
 
-That's it. You'll get a 15-test report card in 2 seconds. No engine, no YAML, no setup.
+That's it. You'll get an audited validation report card in 2 seconds. No engine, no YAML, no setup.
 
 Add a `position` column for IC (Information Coefficient) analysis.
 

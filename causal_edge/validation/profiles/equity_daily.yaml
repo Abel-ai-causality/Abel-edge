@@ -28,7 +28,6 @@ validation:
   dsr_min: 0.90
   dsr_K: 500
   pbo_max: 0.10
-  oos_is_min: 0.50
   neg_roll_frac_max: 0.15
   max_loss_years: 2
   lo_adjusted_min: 0.5
