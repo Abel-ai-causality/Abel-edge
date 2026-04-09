@@ -59,6 +59,9 @@ The runtime now accepts an optional externally declared `dsr_trials` count. When
 caller does not provide it, the active profile supplies the fallback default through
 `validation.dsr_K`.
 
+`bootstrap_p` may still appear as a diagnostic payload metric, but it is no longer part
+of the live gate contract.
+
 ## Current Concerns
 
 1. `sortino = 0.0` when there is no downside is a deterministic sentinel, not a

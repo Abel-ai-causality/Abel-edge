@@ -238,6 +238,16 @@ class TestComputeAllMetrics:
         m = compute_all_metrics(pnl, dates, pos, asset_returns=asset_returns)
         assert m["position_ic"] > 0.3
 
+    def test_position_ic_low_variance_inputs_remain_applicable(self):
+        dates = _make_dates(n=500)
+        asset_returns = np.full(500, 0.01)
+        pos = np.full(500, 0.5)
+        pnl = pos * asset_returns
+        m = compute_all_metrics(pnl, dates, pos, asset_returns=asset_returns)
+        assert m["position_ic_applicable"] is True
+        assert m["position_ic_stability_applicable"] is False
+        assert m["position_ic"] == 0.0
+
     def test_too_short_raises(self):
         with pytest.raises(ValueError, match="at least 30"):
             compute_all_metrics(np.array([0.01] * 10), _make_dates(10))

@@ -19,7 +19,6 @@ metric_triangle:
 
 anti_gaming:
   return_floor: 0.30
-  max_dd_gate: -0.15                           # absolute gate (not relative comparison)
   sharpe_lo_ratio_max: 3.0
   position_ic_min: 0.02
   position_ic_stability_min: 0.55
@@ -33,4 +32,4 @@ validation:
   max_loss_years: 2
   lo_adjusted_min: 0.5
   omega_min: 1.0
-  max_dd: -0.15
+  max_dd: -0.15                               # absolute gate and KEEP/DISCARD veto

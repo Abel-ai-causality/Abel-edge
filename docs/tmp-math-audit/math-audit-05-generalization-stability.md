@@ -65,6 +65,8 @@ fold matrix, or model-selection event needed to define a true CPCV/PBO calculati
 The code resamples the PnL path with replacement and estimates the probability that
 bootstrapped Sharpe is non-positive.
 
+This remains diagnostic-only. The live gate no longer uses a bootstrap threshold.
+
 ## Current Concerns
 
 1. The removed OOS/IS family had no defensible runtime contract because the validator

@@ -203,6 +203,16 @@ class TestKeepDiscard:
         c = {"lo_adjusted": 3.0, "position_ic": 0.15, "omega": 2.5, "max_dd": -0.30}
         assert decide_keep_discard(c, b, load_profile("crypto_daily")) == "DISCARD"
 
+    def test_maxdd_uses_validation_policy_key(self):
+        profile = {
+            "metric_triangle": {"optimize": "sharpe", "guardrails": []},
+            "anti_gaming": {},
+            "validation": {"max_dd": -0.20},
+        }
+        b = {"sharpe": 1.0, "max_dd": -0.10}
+        c = {"sharpe": 2.0, "max_dd": -0.25}
+        assert decide_keep_discard(c, b, profile) == "DISCARD"
+
 
 # ═══════════════════════════════════════════════════════════════════
 # Integration

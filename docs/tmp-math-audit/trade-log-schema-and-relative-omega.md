@@ -2,15 +2,16 @@
 
 ## Why This Exists
 
-The current validation input is a trade log with a very small schema:
+The current validation input is a trade log with a still-minimal schema:
 
 - `date`
+- `asset_return`
 - `pnl`
 - `position`
 - `cum_return`
 - `source`
 
-That is enough for absolute path metrics, but not enough for benchmark-aware metrics
+That is enough for absolute path metrics and Position-Return IC, but not enough for benchmark-aware metrics
 such as "strategy Omega vs the underlying ticker's long-only Omega over the same span".
 
 ## Problem
@@ -91,7 +92,7 @@ It is a worse fit for:
 ## Suggested Future Contract
 
 1. Keep absolute Omega as a shape guardrail.
-2. Add `omega_applicable` to avoid treating no-loss paths as failed shape.
+2. Keep `omega_applicable` as the no-loss applicability guard already used by the live contract.
 3. Introduce `relative_omega_applicable` only when the trade log includes the benchmark
    reconstruction fields above.
 4. Only then consider a conditional gate such as:

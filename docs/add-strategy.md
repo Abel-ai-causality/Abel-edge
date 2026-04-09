@@ -12,6 +12,8 @@ That's it. You'll get an audited validation report card in 2 seconds. No engine,
 
 Add `position` and `asset_return` columns for Position-Return IC analysis.
 
+Read `docs/validation-audit-matrix.md` for the long-lived timing and validation contract.
+
 ## Build a Strategy Engine
 
 ### Three starting points
@@ -68,7 +70,6 @@ class MyEngine(StrategyEngine):
         # Returns: (positions, dates, prices)
         # positions: np.ndarray of daily position sizes (0=flat, 1=long)
         # dates: pd.DatetimeIndex
-        # returns: np.ndarray of daily asset returns
         # prices: np.ndarray of daily closing prices
         ...
 
@@ -83,3 +84,21 @@ class MyEngine(StrategyEngine):
 - `rolling().mean()` must be followed by `.shift(1)` before use in decisions
 - Clip returns for training features only, use unclipped for PnL
 - strategies/ must not import causal_edge/ internals (except base.py)
+
+## Timing Contract
+
+Validation assumes this bar-by-bar relationship:
+
+```text
+price[t-1], price[t] -> asset_return[t]
+information through t-1 -> position[t]
+position[t] * asset_return[t] -> pnl[t]
+cumprod(1 + pnl[:t]) - 1 -> cum_return[t]
+```
+
+## Audit Checklist
+
+- Every feature used to determine `position[t]` must be lagged by at least one bar.
+- No decision path may use `price[t]` or `asset_return[t]` when setting `position[t]`.
+- No alignment step may propagate future observations backward into earlier timestamps.
+- The emitted trade log must preserve `pnl[t] = position[t] * asset_return[t]`.

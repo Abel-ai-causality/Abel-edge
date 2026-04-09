@@ -286,6 +286,7 @@ def decide_keep_discard(current: dict, baseline: dict, profile: dict) -> str:
     """
     mt = profile.get("metric_triangle", {})
     ag = profile.get("anti_gaming", {})
+    v = profile.get("validation", {})
 
     opt_key = {"lo_adjusted_sharpe": "lo_adjusted", "sharpe": "sharpe"}.get(
         mt.get("optimize", "lo_adjusted_sharpe"), "lo_adjusted"
@@ -303,14 +304,14 @@ def decide_keep_discard(current: dict, baseline: dict, profile: dict) -> str:
             "total_return": "total_return",
         }.get(guard["metric"], guard["metric"])
         tol = guard.get("tolerance", 0)
-        if key == "total_pnl" and baseline.get(key, 0) > 0:
+        if key == "total_return" and baseline.get(key, 0) > 0:
             if current.get(key, 0) < baseline[key] * (1 - tol):
                 return "DISCARD"
         else:
             if current.get(key, 0) < baseline.get(key, 0) - tol:
                 return "DISCARD"
 
-    if current.get("max_dd", 0) < ag.get("max_dd_gate", -0.25):
+    if current.get("max_dd", 0) < v.get("max_dd", -0.25):
         return "DISCARD"
 
     return "KEEP"

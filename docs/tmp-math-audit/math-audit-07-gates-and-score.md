@@ -30,6 +30,13 @@ The live gate applies these checks:
 - conditional `PositionIC`
 - conditional `PositionIC stab`
 
+The removed validation families are not part of the live gate:
+
+- `T7 PBO`
+- `T12 OOS/IS`
+- `T13 NegRoll`
+- `Bootstrap p` as a gate
+
 ### Score denominator
 
 `_count_total()` sets:
@@ -40,7 +47,10 @@ The live gate applies these checks:
 - plus `1` if `position_ic_applicable` is true
 - plus `1` if `position_ic_stability_applicable` is true
 
-So the live denominator is conditional, commonly `7` through `11`, not the older `15`-style language.
+So the live denominator is conditional, commonly `7` through `11`, with `PositionIC` and `PositionIC stab` counted separately rather than as one bundled `+2` rule.
+
+This denominator is the only active score contract. Legacy fixed-denominator narratives
+such as `15/15`, `15/21`, or `20/21` are historical migration context, not live math.
 
 ### KEEP/DISCARD
 
@@ -48,7 +58,7 @@ So the live denominator is conditional, commonly `7` through `11`, not the older
 
 1. one optimize metric that must improve
 2. guardrail metrics that must not degrade past tolerance
-3. an absolute drawdown veto
+3. an absolute drawdown veto using the same `validation.max_dd` policy key as PASS/FAIL
 
 This is a product comparator, not a significance test.
 

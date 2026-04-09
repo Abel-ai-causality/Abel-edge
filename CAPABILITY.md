@@ -132,6 +132,8 @@ class MyEngine(StrategyEngine):
 
 Register in `strategies.yaml` → `causal-edge run` → `causal-edge validate`.
 
+Timing and audit contract reference: `docs/validation-audit-matrix.md`.
+
 ## 8. Scaffold a Full Project
 
 ```bash

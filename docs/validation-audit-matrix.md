@@ -2,156 +2,63 @@
 
 ## Scope
 
-This is the finalized audit ledger for the `validate` subsystem.
-It records the audited live contract after remediation of gates, metrics, profile wiring, score semantics, and public documentation.
-
-### Final Verdict Vocabulary
-- `keep` — retained in the audited live contract
-- `rebuild` — retained, but algorithm/semantics were materially corrected
-- `defer` — removed from the live contract and tracked for future re-entry
-- `clarify` — retained, but the primary remediation was contract/applicability clarification
+This is the long-lived validation contract reference for the `validate` subsystem.
+It records the current runtime contract, score semantics, and migration notes for the
+public validation surface.
 
 ## Runtime Surfaces
 
-| Surface | File | Audited state |
+| Surface | File | Current contract |
 |---|---|---|
-| Metric computation | `causal_edge/validation/metrics.py` | Live metric payload includes explicit `ic_applicable` semantics |
-| Gate evaluation | `causal_edge/validation/metrics.py` | Live failures are T6/T13/T14/T15-Lo/T15-Omega/T15-MaxDD plus `Return floor`, `Sharpe/Lo`, and conditional `IC`/`IC stab` |
+| Metric computation | `causal_edge/validation/metrics.py`, `causal_edge/validation/position_ic.py` | Live payload computes ratio, shape, and Position-Return IC metrics from `pnl`, optional `position`, and optional `asset_return` |
+| Gate evaluation | `causal_edge/validation/metrics.py` | Live failures are conditional on applicability rather than fixed legacy gate counts |
 | Result contract | `causal_edge/validation/gate.py` | `validate_strategy()` returns `verdict`, `score`, `failures`, `metrics`, `triangle`, `profile` |
-| Score denominator | `causal_edge/validation/gate.py` | `_count_total()` yields `7` checks base, adds `+1` when `omega_applicable`, adds `+1` when `loss_years_applicable`, and adds `+2` when `ic_applicable` is true |
-| Profiles | `causal_edge/validation/profiles/*.yaml` | Only justified live keys remain; orphan keys were removed and deferred |
-| CLI/report contract | `causal_edge/cli.py`, `causal_edge/validation/gate.py` | No-position verbose output omits IC-family diagnostics |
-| Public claims | `README.md`, `CAPABILITY.md`, `causal_edge/validation/AGENTS.md`, `causal_edge/validation/__init__.py` | Active public wording matches the audited live contract |
+| Trade-log contract | `causal_edge/engine/ledger.py`, `causal_edge/validation/gate.py` | Validation consumes trade logs with `date`, `pnl`, optional `position`, optional `asset_return`, and derived `cum_return` |
+| Public wording | `README.md`, `CAPABILITY.md`, `causal_edge/validation/AGENTS.md` | Public docs should describe the applicable-gate live contract rather than legacy fixed-denominator narratives |
 
-## Contract Summary
+## Timing Contract
 
-| Item | Final state | Evidence |
-|---|---|---|
-| Score denominator | `7` without IC applicability, `9` with IC applicability, plus `+1` each when `Omega` or `LossYrs` is applicable | `causal_edge/validation/gate.py`, `tests/test_validation_contract.py` |
-| Removed OOS/IS family | `oos_is`, `is_sharpe`, `oos_sharpe`, `T12 OOS/IS`, and `validation.oos_is_min` were removed from the live contract and deferred | `causal_edge/validation/metrics.py`, profile YAMLs, `causal_edge/validation/deferred_registry.yaml` |
-| IC applicability | Explicit `metrics["ic_applicable"]` controls IC-family counting and failures | `causal_edge/validation/metrics.py`, `tests/test_validation_contract.py` |
-| Removed bootstrap gate | No longer affects live failures or denominator | `causal_edge/validation/metrics.py`, `causal_edge/validation/gate.py`, `causal_edge/validation/deferred_registry.yaml` |
-| Orphan profile keys | Removed from YAML and tracked in deferred registry | profile YAMLs + `causal_edge/validation/deferred_registry.yaml` |
-| Public docs | Legacy `15/21` active claims removed from current public surfaces | `README.md`, `CAPABILITY.md`, `causal_edge/validation/AGENTS.md`, `CHANGELOG.md` |
+The engine and validation pipeline relies on this bar-by-bar timing relationship:
 
-## Metric Decisions
+```text
+price[t-1], price[t] -> asset_return[t]
+information through t-1 -> position[t]
+position[t] * asset_return[t] -> pnl[t]
+cumprod(1 + pnl[:t]) - 1 -> cum_return[t]
+```
 
-| Metric | Verdict | Rationale |
-|---|---|---|
-| `sharpe` | keep | Core retained ratio metric |
-| `lo_adjusted` | rebuild | Retained ratio metric, simplified to a profile-aware lag-1 serial-correlation penalty |
-| `sortino` | keep | Retained as diagnostic payload metric |
-| `total_return` | keep | Retained as live anti-gaming input using compounded strategy return |
-| `max_dd` | rebuild | Unified to wealth-path percentage drawdown; runtime stores a non-positive fraction while reports display the absolute percentage |
-| `calmar` | rebuild | Retained but zero-drawdown sentinel normalized to `0.0` |
-| `dsr` | rebuild | Retained as a live overfitting gate with operator-supplied `dsr_trials` override and profile-default fallback |
-| `pbo` | defer | Removed from the live payload because a single strategy trade log does not provide the candidate-by-fold structure required for true PBO |
-| `oos_is` | defer | Removed from the live payload because a final PnL path does not establish defensible in-sample/out-of-sample provenance |
-| `loss_years` | rebuild | Replaced negative-yearly-Sharpe counting with full-calendar-year negative PnL counting and explicit applicability |
-| `drawdown_time_frac` | rebuild | Replaced rolling-Sharpe heuristic with direct underwater bar fraction |
-| `max_drawdown_duration_bars` | rebuild | Added longest underwater spell in bars as a second drawdown-time gate |
-| `omega` | rebuild | Retained as empirical hurdle-0 Omega with explicit applicability when loss mass exists |
-| `skew` | rebuild | Retained diagnostic metric with constant-series normalization |
-| `sharpe_lo_ratio` | keep | Retained anti-gaming gate input |
-| `bootstrap_p` | clarify | Retained as diagnostic metric only; removed from live gate logic |
-| `ic` | clarify | Retained with explicit applicability semantics |
-| `ic_hit_rate` | clarify | Retained diagnostic metric, shown only when IC is applicable |
-| `ic_stability` | clarify | Retained conditional gate metric under explicit applicability semantics |
-| `ic_monthly_mean` | clarify | Retained diagnostic metric under explicit applicability semantics |
-| `ic_applicable` | keep | Added as explicit contract signal for IC-family applicability |
-| `active_days` | keep | Retained diagnostic sufficiency metric |
-| `total_days` | keep | Retained diagnostic sufficiency metric |
-| `yearly_sharpes` | keep | Retained supporting diagnostic structure |
-| `is_sharpe` | defer | Removed with the OOS/IS family because split-half Sharpe diagnostics no longer have a live contract consumer |
-| `oos_sharpe` | defer | Removed with the OOS/IS family because split-half Sharpe diagnostics no longer have a live contract consumer |
-| `hill_alpha` | defer | Removed from live payload; no gate/report/public contract |
-| `cvar_var_ratio` | defer | Removed from live payload; no gate/report/public contract |
+This implies:
 
-## Gate Decisions
+- `asset_return[t]` is the return realized over the interval from `t-1` to `t`
+- `position[t]` is the exposure chosen before `asset_return[t]` is realized
+- `pnl[t]` is the realized payoff of that pre-chosen exposure over that interval
 
-| Gate / failure | Verdict | Rationale |
-|---|---|---|
-| `T6 DSR` | keep | Live documented overfitting gate; caller may override exploration count via `dsr_trials` |
-| `T7 PBO` | defer | Removed from live validation because the runtime input contract cannot support a true PBO calculation |
-| `T12 OOS/IS` | defer | Removed from live validation because half-split Sharpe ratio lacked a defensible sample-in/sample-out contract |
-| `T13 NegRoll` | defer | Removed from live validation and replaced by direct drawdown-time gates |
-| `T13 DrawdownTime` | keep | Live documented gate on underwater bar fraction |
-| `T13 MaxDDDuration` | keep | Live documented gate on longest underwater spell |
-| `T14 LossYrs` | rebuild | Live gate only when at least one full calendar year is present |
-| `T15 Lo` | keep | Live documented gate |
-| `T15 Omega` | rebuild | Live only when `omega_applicable` is true |
-| `T15 MaxDD` | keep | Live documented gate |
-| `Return floor` | keep | Live anti-gaming gate; retained and documented as non-T-coded failure |
-| `Sharpe/Lo` | keep | Live anti-gaming gate; retained and documented as non-T-coded failure |
-| `IC` | clarify | Live only when `ic_applicable` is true |
-| `IC stab` | clarify | Live only when `ic_applicable` is true |
-| `Bootstrap p` | defer | Removed from live gate because no profile-configurable threshold or public contract existed |
+The live contract therefore forbids any decision path that uses `price[t]` or
+`asset_return[t]` when constructing `position[t]`.
 
-## Profile Key Decisions
+## Audit Checklist
 
-| Key family | Verdict | Final state |
-|---|---|---|
-| `validation.dsr_K` | keep | Retained as the default exploration-count prior when `dsr_trials` is not explicitly provided |
-| `validation.pbo_max` | defer | Removed from live YAML because the `T7 PBO` gate was removed for input-contract mismatch |
-| `validation.periods_per_year` | keep | Added as the profile-supplied annualization contract for Sharpe-family metrics |
-| `validation.drawdown_time_frac_max` | keep | Added as the live cap on underwater bar fraction |
-| `validation.max_drawdown_duration_bars_max` | keep | Added as the live bar-based proxy for a 3-month maximum underwater spell |
-| `validation.oos_is_min` | defer | Removed from live YAML after T12 OOS/IS was dropped from the contract |
-| `validation.permutation_*` | defer | Removed from live YAML; tracked in deferred registry |
-| `validation.look_ahead_*` | defer | Removed from live YAML; tracked in deferred registry |
-| `anti_gaming.relative_pnl_drop_max` | defer | Removed from live YAML; tracked in deferred registry |
+Apply these checks when auditing strategy math:
 
-## Public Claim Crosswalk
+1. Every feature used to determine `position[t]` must be lagged by at least one bar.
+2. No decision path may use `price[t]` or `asset_return[t]` when setting `position[t]`.
+3. No alignment step may propagate future observations backward into earlier timestamps.
+4. The emitted trade log must preserve the interpretation `pnl[t] = position[t] * asset_return[t]`.
 
-| Surface | Final audited message |
-|---|---|
-| `README.md` | Validation uses the audited live contract; no active `15-test` or `21`-style wording remains |
-| `CAPABILITY.md` | Examples describe conditional denominators across IC, Omega, and LossYrs applicability |
-| `causal_edge/validation/AGENTS.md` | Operator guidance references the audited live contract and deferred registry |
-| `causal_edge/validation/__init__.py` | Exported docstring describes applicable-gate denominator semantics |
-| `CHANGELOG.md` | Migration and comparability notes explain denominator and sentinel changes |
+## Score Semantics
 
-## Deferred Registry Alignment
+- The validation score uses an applicable-gate denominator, not a fixed legacy count.
+- The base denominator starts from the always-considered checks, then adds optional
+  checks only when their supporting inputs and applicability conditions are present.
+- `Omega`, `LossYrs`, and Position-Return IC family checks are conditional.
+- `validation.max_dd` is the single MaxDD policy key used both for PASS/FAIL and for
+  the absolute KEEP/DISCARD veto.
 
-The following items were removed from the live contract and are tracked in `causal_edge/validation/deferred_registry.yaml`:
+## Migration Notes
 
-- `hill_alpha`
-- `cvar_var_ratio`
-- `pbo`
-- `neg_roll_frac`
-- `oos_is`
-- `is_sharpe`
-- `oos_sharpe`
-- `T7 PBO`
-- `T13 NegRoll`
-- `validation.pbo_max`
-- `validation.neg_roll_frac_max`
-- `T12 OOS/IS`
-- `validation.oos_is_min`
-- `Bootstrap p` gate
-- `validation.permutation_trials`
-- `validation.permutation_p_max`
-- `validation.look_ahead_mag_corr_max`
-- `validation.look_ahead_hit_rate_max`
-- `anti_gaming.relative_pnl_drop_max`
-
-## Migration Summary
-
-| Item | Change type | Migration note |
-|---|---|---|
-| Score denominator narrative | mathematical correction | Live contract denominator is now conditional on `Omega` and `LossYrs` applicability as well as IC applicability |
-| `omega` applicability | mathematical correction | No-loss paths no longer fail `T15 Omega`; the gate activates only when downside loss mass exists |
-| `loss_years` semantics | mathematical correction | Full-year negative PnL count replaced negative-yearly-Sharpe counting, and partial years no longer activate the gate |
-| `neg_roll_frac` family | removal/rebuild | `neg_roll_frac`, `T13 NegRoll`, and `validation.neg_roll_frac_max` were replaced by direct drawdown-time metrics and thresholds |
-| `PBO` family | removal/defer | `pbo`, `_cpcv()`, `T7 PBO`, and `validation.pbo_max` were removed because a single strategy trade log cannot support a true PBO contract |
-| `OOS/IS` family | removal/defer | `oos_is`, `is_sharpe`, `oos_sharpe`, `T12 OOS/IS`, and `validation.oos_is_min` were removed because a final PnL path could not justify a true IS/OOS claim |
-| `lo_adjusted` simplification | mathematical correction | Fixed-252, 10-lag approximation was replaced with a profile-aware lag-1 serial-correlation penalty |
-| `dsr_trials` override | clarification | DSR now accepts caller-supplied exploration counts and falls back to the profile default only when no explicit declaration is provided |
-| `omega` no-loss sentinel | mathematical correction | `999` → `0.0`; historical reports using sentinel values are not directly comparable |
-| `calmar` zero-drawdown sentinel | mathematical correction | `999` → `0.0`; historical reports using sentinel values are not directly comparable |
-| `skew` constant-series sentinel | clarification | `NaN` → `0.0` for deterministic payload semantics |
-| `Bootstrap p` gate | removal/defer | Removed from live validation and tracked in deferred registry pending future contract definition |
-| `validation.permutation_*` | removal/defer | Removed from live profiles and tracked in deferred registry |
-| `validation.look_ahead_*` | removal/defer | Removed from live profiles and tracked in deferred registry |
-| `anti_gaming.relative_pnl_drop_max` | removal/defer | Removed from live profiles and tracked in deferred registry |
-| IC applicability semantics | clarification | Explicit `ic_applicable` flag replaces implicit zero-value inference |
+- Historical scorecards with older denominators are not directly comparable to the
+  current applicable-gate contract.
+- Trade logs without `asset_return` remain supported, but they cannot activate the
+  full Position-Return IC family.
+- Deferred and removed validation items belong in
+  `causal_edge/validation/deferred_registry.yaml` rather than in this contract file.

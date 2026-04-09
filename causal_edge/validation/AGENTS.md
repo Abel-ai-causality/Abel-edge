@@ -12,9 +12,10 @@ Three leverage-invariant dimensions:
 
 ### Contract notes
 - The audited live validation contract uses applicable-gate denominators rather than legacy `20/21` score narratives.
-- Typical denominators start at `7`, add `+2` for Position-Return IC, `+1` for `Omega` applicability, and `+1` for full-year `LossYrs` applicability.
+- Typical denominators start at `7`, add `+1` for `Omega` applicability, `+1` for full-year `LossYrs` applicability, `+1` for `position_ic_applicable`, and `+1` for `position_ic_stability_applicable`.
 - DSR accepts optional externally declared exploration counts via `dsr_trials`; otherwise it falls back to the profile default `validation.dsr_K`.
 - Deferred/removed gates and profile keys are tracked in `causal_edge/validation/deferred_registry.yaml`.
+- The long-lived timing and audit contract is summarized in `docs/validation-audit-matrix.md`.
 
 ### Understand why it failed
 

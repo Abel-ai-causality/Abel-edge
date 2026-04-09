@@ -19,7 +19,7 @@ def compute_position_ic(asset_returns, positions, dates):
         else 0.0
     )
     if np.std(ap) < 1e-10 or np.std(ar) < 1e-10:
-        return 0.0, hit_rate, 0.0, 0.0, False, False
+        return 0.0, hit_rate, 0.0, 0.0, True, False
 
     position_ic = float(sp_stats.spearmanr(ap, ar)[0])
     if np.isnan(position_ic):

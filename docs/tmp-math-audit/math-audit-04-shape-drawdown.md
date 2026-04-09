@@ -52,6 +52,9 @@ omega = sum(active[active > 0]) / abs(sum(active[active < 0]))
 If there are no losses, the payload keeps `omega = 0.0` but marks
 `omega_applicable = False`, and the live gate does not count `T15 Omega` for that run.
 
+The validator does not use benchmark-relative Omega in the live contract. That remains
+deferred until the trade-log schema can reconstruct a benchmark path without guessing.
+
 ### Skew and tail diagnostics
 
 The payload also includes `skew`, `var_5`, and `cvar_5`, but only `skew` survives in

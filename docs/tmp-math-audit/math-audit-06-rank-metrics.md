@@ -9,12 +9,17 @@ producing a good aggregate PnL path?
 ## Concrete Algorithms
 
 1. Position-Return IC applicability in `causal_edge/validation/metrics.py`
-2. `_compute_position_ic()` in `causal_edge/validation/metrics.py`
+2. `compute_position_ic()` in `causal_edge/validation/position_ic.py`
 3. Conditional PositionIC gates in `causal_edge/validation/metrics.py`
 
 ## Current Implementation
 
 The Position-Return IC family activates only when `positions` and `asset_return` are present and aligned.
+
+The live gate treats the family as two separate applicable checks:
+
+- `PositionIC`, active when `position_ic_applicable` is true
+- `PositionIC stab`, active when `position_ic_stability_applicable` is true
 
 The helper then:
 
@@ -35,6 +40,9 @@ common cross-sectional IC used in stock-selection frameworks.
 1. The project should call this a Position-Return IC, not a generic IC.
 2. `position_hit_rate` is a useful diagnostic but should remain non-gating.
 3. The `0.01` active threshold is a policy choice, not a mathematical identity.
+4. When active inputs are present but position or asset-return variance collapses, the
+   live contract now treats PositionIC as applicable with `position_ic = 0.0` rather
+   than silently skipping the family.
 
 ## Audit Questions
 
