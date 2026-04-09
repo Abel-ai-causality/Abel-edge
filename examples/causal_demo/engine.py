@@ -111,11 +111,11 @@ class CausalDemoEngine(StrategyEngine):
         # Long-only (no short in demo)
         positions = np.maximum(positions, 0.0)
 
-        return positions, dates, target_ret, target_prices
+        return positions, dates, target_prices
 
     def get_latest_signal(self):
         """Return latest causal voting signal."""
-        positions, dates, _, prices = self.compute_signals()
+        positions, dates, prices = self.compute_signals()
         return {
             "position": float(positions[-1]),
             "date": str(dates[-1].date()),

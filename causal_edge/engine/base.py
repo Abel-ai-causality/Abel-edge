@@ -18,7 +18,7 @@ class StrategyEngine(ABC):
     """Base class for all strategy engines.
 
     Subclasses must implement:
-        compute_signals() -> tuple of (positions, dates, returns, prices)
+        compute_signals() -> tuple of (positions, dates, prices)
         get_latest_signal() -> dict with at least 'position' key
     """
 
@@ -60,17 +60,16 @@ class StrategyEngine(ABC):
     @abstractmethod
     def compute_signals(
         self,
-    ) -> tuple[np.ndarray, pd.DatetimeIndex, np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, pd.DatetimeIndex, np.ndarray]:
         """Compute full signal history.
 
         Returns:
-            Tuple of (positions, dates, returns, prices) where:
+            Tuple of (positions, dates, prices) where:
                 positions: np.ndarray of daily position sizes (0=flat, 1=long).
                     IMPORTANT: positions[t] must be decided using only data through
                     day t-1. Apply .shift(1) to any indicators before using them
                     to determine positions. This prevents look-ahead bias.
                 dates: pd.DatetimeIndex of trading dates
-                returns: np.ndarray of daily asset returns
                 prices: np.ndarray of daily closing prices
         """
 

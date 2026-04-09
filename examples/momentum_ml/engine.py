@@ -92,11 +92,11 @@ class MomentumMLEngine(StrategyEngine):
             # Long if P(up) > 0.55 (conservative threshold)
             positions[t] = 1.0 if prob[1] > 0.55 else 0.0
 
-        return positions, dates, returns, prices
+        return positions, dates, prices
 
     def get_latest_signal(self):
         """Return latest position from walk-forward model."""
-        positions, dates, _, prices = self.compute_signals()
+        positions, dates, prices = self.compute_signals()
         return {
             "position": float(positions[-1]),
             "date": str(dates[-1].date()),

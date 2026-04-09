@@ -179,9 +179,9 @@ class SMAEngine(StrategyEngine):
         slow_ma = pd.Series(prices).rolling(self.slow).mean().shift(1).values
         positions = np.where(fast_ma > slow_ma, 1.0, 0.0)
         positions[:self.slow + 1] = 0.0
-        return positions, dates, returns, prices
+        return positions, dates, prices
 
     def get_latest_signal(self):
-        positions, dates, _, prices = self.compute_signals()
+        positions, dates, prices = self.compute_signals()
         return {"position": float(positions[-1]), "date": str(dates[-1].date())}
 """

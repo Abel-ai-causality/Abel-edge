@@ -65,7 +65,7 @@ Your engine must implement `StrategyEngine` from `causal_edge/engine/base.py`:
 class MyEngine(StrategyEngine):
     def compute_signals(self):
         # Optional: load price bars via self.load_bars()
-        # Returns: (positions, dates, returns, prices)
+        # Returns: (positions, dates, prices)
         # positions: np.ndarray of daily position sizes (0=flat, 1=long)
         # dates: pd.DatetimeIndex
         # returns: np.ndarray of daily asset returns

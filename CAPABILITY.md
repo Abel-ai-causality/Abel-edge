@@ -124,7 +124,7 @@ class MyEngine(StrategyEngine):
     def compute_signals(self):
         # RULE: positions[t] decided using only data through t-1
         # RULE: all rolling().mean() followed by .shift(1)
-        # Returns: (positions, dates, returns, prices)
+        # Returns: (positions, dates, prices)
         ...
     def get_latest_signal(self):
         return {"position": float(positions[-1])}

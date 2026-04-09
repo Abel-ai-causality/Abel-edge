@@ -52,7 +52,11 @@ def run_one(strategy_cfg: dict, *, settings: dict | None = None, bars_loader=Non
             resolve_price_config(settings or {}, strategy_cfg),
         )
 
-    positions, dates, returns, prices = engine.compute_signals()
+    positions, dates, prices = engine.compute_signals()
+
+    returns = np.zeros_like(prices, dtype=float)
+    if len(prices) > 1:
+        returns[1:] = prices[1:] / prices[:-1] - 1.0
 
     # PnL: positions[t] * returns[t] is correct because the engine contract
     # requires positions[t] to be decided using data through t-1 only.
@@ -61,7 +65,7 @@ def run_one(strategy_cfg: dict, *, settings: dict | None = None, bars_loader=Non
     # First day has no prior position signal
     pnl[0] = 0.0
 
-    write_trade_log(dates, pnl, positions, trade_log_path)
+    write_trade_log(dates, returns, pnl, positions, trade_log_path)
 
     return {"id": sid, "n_days": len(dates), "trade_log": trade_log_path}
 

@@ -29,11 +29,11 @@ class SMAEngine(StrategyEngine):
         positions = np.where(fast_ma > slow_ma, 1.0, 0.0)
         positions[: self.slow + 1] = 0.0  # +1 for shift; no signal until slow MA warms up
 
-        return positions, dates, returns, prices
+        return positions, dates, prices
 
     def get_latest_signal(self):
         """Return latest position from the crossover."""
-        positions, dates, _, prices = self.compute_signals()
+        positions, dates, prices = self.compute_signals()
         return {
             "position": float(positions[-1]),
             "date": str(dates[-1].date()),

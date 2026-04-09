@@ -119,8 +119,8 @@ def test_resolve_price_column_prefers_close():
 
 def test_causal_demo_runs_with_default_parent_metadata():
     engine = CausalDemoEngine()
-    positions, dates, returns, prices = engine.compute_signals()
-    assert len(positions) == len(dates) == len(returns) == len(prices)
+    positions, dates, prices = engine.compute_signals()
+    assert len(positions) == len(dates) == len(prices)
     assert positions[-1] >= 0.0
 
 
