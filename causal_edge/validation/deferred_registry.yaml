@@ -45,6 +45,20 @@ entries:
       - Runtime consumer and threshold semantics are documented and tested
     docs_updated: true
 
+  - name: neg_roll_frac
+    type: metric
+    status: deferred
+    removed_from:
+      - causal_edge/validation/metrics.py
+    reason: Replaced by direct drawdown-time metrics because rolling-Sharpe heuristics hard-coded window assumptions and short samples defaulted to false stability.
+    required_inputs:
+      - pnl path
+      - explicit rolling-window contract
+    reentry_conditions:
+      - Rolling stability semantics are redefined and documented
+      - Runtime consumer and thresholds are tested
+    docs_updated: true
+
   - name: oos_is
     type: metric
     status: deferred
@@ -129,6 +143,21 @@ entries:
       - explicit PBO metric contract
     reentry_conditions:
       - PBO is reintroduced with candidate-by-fold inputs
+      - Threshold rationale is documented and tested
+    docs_updated: true
+
+  - name: validation.neg_roll_frac_max
+    type: profile_key
+    status: deferred
+    removed_from:
+      - causal_edge/validation/profiles/equity_daily.yaml
+      - causal_edge/validation/profiles/crypto_daily.yaml
+      - causal_edge/validation/profiles/hft.yaml
+    reason: Orphaned by replacement of T13 NegRoll with direct drawdown-time gates.
+    required_inputs:
+      - explicit rolling stability contract
+    reentry_conditions:
+      - Rolling stability metric is reintroduced
       - Threshold rationale is documented and tested
     docs_updated: true
 
@@ -217,6 +246,19 @@ entries:
     reentry_conditions:
       - External explorer provides CPCV candidate artifacts
       - Gate definition and threshold policy are documented and tested
+    docs_updated: true
+
+  - name: T13 NegRoll
+    type: gate
+    status: deferred
+    removed_from:
+      - causal_edge/validation/metrics.py
+    reason: Removed from live validation and replaced by direct drawdown-time gates that operate on underwater bar time rather than rolling-Sharpe heuristics.
+    required_inputs:
+      - explicit rolling stability contract
+    reentry_conditions:
+      - Rolling stability gate is redefined and documented
+      - Threshold policy is tested
     docs_updated: true
 
   - name: T12 OOS/IS

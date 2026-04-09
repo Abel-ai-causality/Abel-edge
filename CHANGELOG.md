@@ -4,7 +4,8 @@
 
 ### Changed
 - **Validation contract migration**: `validate` no longer uses the legacy `20/21`-style denominator narrative. The audited live contract now reports denominators based on applicable gates: typically `9` when the IC family is not applicable and `11` when the IC family is applicable.
-- **Validation contract migration**: `validate` no longer uses the legacy `20/21`-style denominator narrative. The audited live contract now reports denominators based on applicable gates: typically `8` when the IC family is not applicable and `10` when the IC family is applicable.
+- **Validation contract migration**: `validate` no longer uses the legacy `20/21`-style denominator narrative. The audited live contract now reports denominators based on applicable gates: typically `9` when the IC family is not applicable and `11` when the IC family is applicable.
+- **Stability gate redesign**: `T13 NegRoll` was replaced by direct drawdown-time gates on underwater bar fraction and maximum underwater duration in bars.
 - **Mathematical corrections**: no-loss `omega` and zero-drawdown `calmar` now normalize to `0.0` instead of sentinel `999`, and constant-series `skew` now normalizes to `0.0` instead of `NaN`.
 - **Applicability semantics**: IC-family behavior is now explicit via `metrics["ic_applicable"]` rather than inferred from zero-valued IC metrics.
 

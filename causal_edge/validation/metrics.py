@@ -115,9 +115,10 @@ def compute_all_metrics(
         if ysh < 0:
             loss_years += 1
 
-    # Rolling 252d Sharpe
-    roll_sharpes = [_sharpe(pnl[i - 252 : i]) for i in range(252, T, 63)]
-    neg_roll_frac = float(np.mean(np.array(roll_sharpes) < 0)) if roll_sharpes else 0
+    # Drawdown-time stability: fraction of bars underwater and longest underwater spell.
+    underwater = cum < (np.maximum.accumulate(cum) - 1e-12)
+    drawdown_time_frac = float(np.mean(underwater)) if T > 0 else 0.0
+    max_drawdown_duration_bars = _max_true_run(underwater)
 
     # Omega (gain/loss asymmetry — catches clipping)
     active = pnl[np.abs(pnl) > 1e-10]
@@ -160,7 +161,8 @@ def compute_all_metrics(
         "dsr": dsr,
         "dsr_trials_used": int(dsr_trials_used),
         "loss_years": loss_years,
-        "neg_roll_frac": neg_roll_frac,
+        "drawdown_time_frac": drawdown_time_frac,
+        "max_drawdown_duration_bars": max_drawdown_duration_bars,
         "omega": omega,
         "skew": skew,
         "sharpe_lo_ratio": sharpe_lo_ratio,
@@ -189,9 +191,14 @@ def validate(metrics: dict, profile: dict) -> tuple[bool, list[str]]:
 
     if metrics["dsr"] < v.get("dsr_min", 0.90):
         failures.append(f"T6 DSR {metrics['dsr']:.1%} < {v['dsr_min']:.0%}")
-    if metrics["neg_roll_frac"] > v.get("neg_roll_frac_max", 0.15):
+    if metrics["drawdown_time_frac"] > v.get("drawdown_time_frac_max", 0.35):
         failures.append(
-            f"T13 NegRoll {metrics['neg_roll_frac']:.0%} > {v['neg_roll_frac_max']:.0%}"
+            f"T13 DrawdownTime {metrics['drawdown_time_frac']:.0%} > {v['drawdown_time_frac_max']:.0%}"
+        )
+    max_dd_bars_limit = v.get("max_drawdown_duration_bars_max")
+    if max_dd_bars_limit is not None and metrics["max_drawdown_duration_bars"] > max_dd_bars_limit:
+        failures.append(
+            f"T13 MaxDDDuration {metrics['max_drawdown_duration_bars']} > {max_dd_bars_limit} bars"
         )
     if metrics["loss_years"] > v.get("max_loss_years", 2):
         failures.append(f"T14 LossYrs {metrics['loss_years']} > {v['max_loss_years']}")
@@ -275,6 +282,19 @@ def _sortino(pnl):
         return 0.0
     ds = np.std(down, ddof=1)
     return float(np.mean(pnl) / ds * np.sqrt(252)) if ds > 1e-10 else 0.0
+
+
+def _max_true_run(mask) -> int:
+    max_run = 0
+    run = 0
+    for flag in mask:
+        if flag:
+            run += 1
+            if run > max_run:
+                max_run = run
+        else:
+            run = 0
+    return int(max_run)
 
 
 def _dsr(pnl, T, K=300, periods_per_year=252):

@@ -25,7 +25,8 @@ validation:
   periods_per_year: 252
   dsr_min: 0.90
   dsr_K: 1000                    # HFT typically explores many configs
-  neg_roll_frac_max: 0.10
+  drawdown_time_frac_max: 0.35
+  max_drawdown_duration_bars_max: null  # unknown until HFT bar cadence is explicitly contracted
   max_loss_years: 1              # HFT should not have loss years
   lo_adjusted_min: 0.0           # Lo not meaningful for tick data
   omega_min: 1.5

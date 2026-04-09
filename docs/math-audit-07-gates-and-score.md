@@ -19,7 +19,8 @@ the exact decision layer that produces PASS, FAIL, KEEP, and DISCARD.
 The live gate applies these checks:
 
 - `T6 DSR`
-- `T13 NegRoll`
+- `T13 DrawdownTime`
+- `T13 MaxDDDuration`
 - `T14 LossYrs`
 - `T15 Lo`
 - `T15 Omega`
@@ -34,10 +35,10 @@ The live gate applies these checks:
 `_count_total()` sets:
 
 - base count `10`
-- base count `8`
+- base count `9`
 - plus `2` if `ic_applicable` is true
 
-So the live denominator is `8` or `10`, not the older `15`-style language.
+So the live denominator is `9` or `11`, not the older `15`-style language.
 
 ### KEEP/DISCARD
 

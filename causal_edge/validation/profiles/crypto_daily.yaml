@@ -28,7 +28,8 @@ validation:
   periods_per_year: 365
   dsr_min: 0.90
   dsr_K: 300
-  neg_roll_frac_max: 0.15
+  drawdown_time_frac_max: 0.35
+  max_drawdown_duration_bars_max: 91   # ~3 months at daily calendar-bar cadence
   max_loss_years: 2
   lo_adjusted_min: 1.0
   omega_min: 1.0

@@ -9,7 +9,7 @@ across time slices, and under alternative path splits.
 
 1. Removed `oos_is` family audit record from `causal_edge/validation/metrics.py`
 2. `loss_years` in `causal_edge/validation/metrics.py:114-121`
-3. `neg_roll_frac` in `causal_edge/validation/metrics.py:123-125`
+3. `drawdown_time_frac` and `max_drawdown_duration_bars` in `causal_edge/validation/metrics.py`
 4. Removed `pbo` / `_cpcv()` audit record from `causal_edge/validation/metrics.py`
 5. `bootstrap_p` via `_bootstrap_sharpe()` in `causal_edge/validation/metrics.py`
 
@@ -42,10 +42,14 @@ abs(oos_is) < threshold
 For each calendar year, the code computes yearly Sharpe and counts how many years
 have negative Sharpe.
 
-### Negative rolling Sharpe fraction
+### Drawdown-time stability
 
-The code computes 252-day rolling Sharpe windows sampled every 63 days and reports
-the fraction of those windows with negative Sharpe.
+The live contract now measures stability using underwater time directly.
+
+It computes:
+
+1. `drawdown_time_frac`: fraction of bars where cumulative PnL is below its running peak
+2. `max_drawdown_duration_bars`: longest consecutive underwater spell in bars
 
 ### Removed PBO family
 
@@ -67,12 +71,16 @@ bootstrapped Sharpe is non-positive.
    out-of-sample Sharpe to pass.
 3. The removed PBO family had an input-contract mismatch: validator runtime receives a
    final trade log, not the candidate-by-fold research artifact a true PBO requires.
-4. `bootstrap_p` is still computed but no longer drives a live gate.
+4. HFT currently leaves `max_drawdown_duration_bars_max` unknown until bar cadence is
+   explicitly contracted in the profile.
+5. `bootstrap_p` is still computed but no longer drives a live gate.
 
 ## Audit Questions
 
 1. Should the OOS/IS family stay deferred unless the runtime receives explicit train/test provenance?
 2. If PBO ever returns, should it require an explicit candidate-by-fold CPCV artifact
    from the external explorer instead of inferring anything from a single PnL path?
-3. If OOS-style checks ever return, should they require explicit fold metadata rather
+3. Should HFT remain partially unspecified here until its bar cadence is made explicit
+   in profile contracts?
+4. If OOS-style checks ever return, should they require explicit fold metadata rather
    than inferring IS/OOS from a final contiguous PnL path?

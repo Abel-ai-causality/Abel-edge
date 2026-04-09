@@ -20,8 +20,8 @@ from causal_edge.validation.gate import validate_strategy
 
 result = validate_strategy("backtest.csv")  # needs: date, pnl columns
 # result["verdict"]  → "PASS" or "FAIL"
-# result["score"]    → "8/10"  # denominator depends on applicable gates in the audited contract
-# result["failures"] → ["T6 DSR 12% < 90%", "T13 NegRoll 45% > 15%", ...]
+# result["score"]    → "9/11"  # denominator depends on applicable gates in the audited contract
+# result["failures"] → ["T6 DSR 12% < 90%", "T13 DrawdownTime 45% > 35%", ...]
 # result["triangle"] → {"ratio": 1.82, "rank": 0.12, "shape": 1.45}
 ```
 
@@ -45,7 +45,8 @@ When validation fails, apply fixes, revalidate, repeat until stable.
 | Failure | Cause | Fix (copy-paste) |
 |---------|-------|------------------|
 | T6 DSR | Too many trials | Reduce param grid. Declare realistic `--dsr-trials`; K<50 ideal |
-| T13 NegRoll | No regime filter | `positions[prices.shift(1) < prices.rolling(50).mean().shift(1)] = 0` |
+| T13 DrawdownTime | Too much time underwater | Add regime filter to reduce time spent below prior equity peaks |
+| T13 MaxDDDuration | Drawdowns recover too slowly | Add kill-switch or faster de-risking to shorten underwater spells |
 | T14 LossYrs | Signal decay | Plot rolling Sharpe — if declining, signal is dying |
 | T15-Lo | Serial corr | `positions *= np.maximum(0.3, 1 - 0.1 * hold_days)` |
 | T15-Omega | Clipped PnL | `pnl = positions * returns` (never clip PnL, only features) |
@@ -78,8 +79,8 @@ No known transformation improves all three except genuine signal improvement.
 
 - The audited live contract uses **applicable-gate denominators**, not the old `21`-style narrative.
 - Typical score denominators are:
-  - `8` when the IC family is not applicable
-  - `10` when the IC family is applicable
+  - `9` when the IC family is not applicable
+  - `11` when the IC family is applicable
 - See `docs/validation-audit-matrix.md` and `CHANGELOG.md` for migration/comparability notes.
 
 **Proof by demo** — same framework, same tests, three strategies:

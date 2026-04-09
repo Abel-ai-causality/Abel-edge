@@ -28,7 +28,8 @@ validation:
   periods_per_year: 252
   dsr_min: 0.90
   dsr_K: 500
-  neg_roll_frac_max: 0.15
+  drawdown_time_frac_max: 0.35
+  max_drawdown_duration_bars_max: 63   # ~3 months at daily business-bar cadence
   max_loss_years: 2
   lo_adjusted_min: 0.5
   omega_min: 1.0
