@@ -19,6 +19,7 @@ import pandas as pd
 import pytest
 from scipy import stats as sp_stats
 
+from causal_edge.dashboard.components import compute_metrics as compute_dashboard_metrics
 from causal_edge.validation.metrics import (
     _sharpe,
     _sortino,
@@ -102,6 +103,20 @@ class TestSortino:
         pnl = np.abs(_make_pnl()) + 0.01
         assert _sortino(pnl) == 0.0  # no negative returns
 
+    def test_periods_per_year_changes_result(self):
+        pnl = _make_pnl(mean=0.001, std=0.02, n=252, seed=11)
+        assert _sortino(pnl, periods_per_year=252) != pytest.approx(
+            _sortino(pnl, periods_per_year=365), rel=1e-12
+        )
+
+
+class TestDashboardMetrics:
+    def test_sharpe_respects_periods_per_year(self):
+        pnl = _make_pnl(mean=0.001, std=0.02, n=252, seed=9)
+        daily = compute_dashboard_metrics(pnl, periods_per_year=252)
+        crypto = compute_dashboard_metrics(pnl, periods_per_year=365)
+        assert crypto["sharpe"] != pytest.approx(daily["sharpe"], rel=1e-12)
+
 
 class TestDSR:
     def test_strong_signal(self):
@@ -174,7 +189,7 @@ class TestComputeAllMetrics:
             "sharpe",
             "lo_adjusted",
             "sortino",
-            "total_pnl",
+            "total_return",
             "max_dd",
             "calmar",
             "dsr",

@@ -7,7 +7,7 @@ asymmetry, and drawdown severity.
 
 ## Concrete Algorithms
 
-1. `total_pnl` in `causal_edge/validation/metrics.py:96`
+1. `total_return` in `causal_edge/validation/metrics.py:96`
 2. `max_dd` in `causal_edge/validation/metrics.py:88-95`
 3. `calmar` in `causal_edge/validation/metrics.py:95`
 4. `omega` in `causal_edge/validation/metrics.py:127-135`
@@ -19,7 +19,7 @@ asymmetry, and drawdown severity.
 
 ```python
 equity = cumprod(1 + pnl)
-total_pnl = equity[-1] - 1
+total_return = equity[-1] - 1
 ```
 
 ### Max drawdown
@@ -37,7 +37,7 @@ This yields a non-positive number.
 ### Calmar
 
 ```python
-calmar = total_pnl / abs(max_dd) if max_dd < 0 else 0.0
+calmar = total_return / abs(max_dd) if max_dd < 0 else 0.0
 ```
 
 ### Omega

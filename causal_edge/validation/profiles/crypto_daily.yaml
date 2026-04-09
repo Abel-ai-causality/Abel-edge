@@ -18,7 +18,7 @@ metric_triangle:
     - {metric: omega, tolerance: 0.10}         # catches clipping (distribution shape space)
 
 anti_gaming:
-  pnl_floor: 1.0
+  return_floor: 1.0
   max_dd_gate: -0.25                           # absolute gate (not relative comparison)
   sharpe_lo_ratio_max: 2.5
   position_ic_min: 0.02

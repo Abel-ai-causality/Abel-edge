@@ -27,10 +27,11 @@ hard-coded to `252` for every profile.
 
 ```python
 downside = pnl[pnl < 0]
-sortino = mean(pnl) / std(downside, ddof=1) * sqrt(252)
+sortino = mean(pnl) / std(downside, ddof=1) * sqrt(periods_per_year)
 ```
 
 If there are fewer than two downside observations, the implementation returns `0.0`.
+Sortino annualization now follows the same profile `periods_per_year` contract as Sharpe.
 
 ### Lo-adjusted Sharpe
 

@@ -101,10 +101,10 @@ def compute_all_metrics(
     periods_per_year = validation_cfg.get("periods_per_year", 252)
 
     sharpe = float(np.mean(pnl) / std * np.sqrt(periods_per_year)) if std > 0 else 0
-    sortino = _sortino(pnl)
+    sortino = _sortino(pnl, periods_per_year=periods_per_year)
     max_dd = float(np.min(dd))
-    total_pnl = float(cum_return[-1])
-    calmar = float(total_pnl / abs(max_dd)) if max_dd < 0 else 0.0
+    total_return = float(cum_return[-1])
+    calmar = float(total_return / abs(max_dd)) if max_dd < 0 else 0.0
 
     # Simplified serial-correlation penalty: lag-1 autocorrelation only.
     rho1 = pd.Series(pnl).autocorr(lag=1)
@@ -125,7 +125,7 @@ def compute_all_metrics(
         mask = dates.year == yr
         year_dates = dates[mask]
         year_pnl = pnl[mask]
-        yearly_sharpes[yr] = _sharpe(year_pnl)
+        yearly_sharpes[yr] = _sharpe(year_pnl, periods_per_year=periods_per_year)
         total_year_pnl = float(np.cumprod(1.0 + year_pnl)[-1] - 1.0)
         yearly_pnl[yr] = total_year_pnl
         if _is_full_calendar_year(year_dates):
@@ -185,7 +185,7 @@ def compute_all_metrics(
         "sharpe": sharpe,
         "lo_adjusted": lo_adjusted,
         "sortino": sortino,
-        "total_pnl": total_pnl,
+        "total_return": total_return,
         "max_dd": max_dd,
         "calmar": calmar,
         "dsr": dsr,
@@ -249,9 +249,9 @@ def validate(metrics: dict, profile: dict) -> tuple[bool, list[str]]:
         failures.append(
             f"T15 MaxDD {abs(metrics['max_dd']) * 100:.1f}% > {abs(v['max_dd']) * 100:.0f}%"
         )
-    if metrics["total_pnl"] < ag.get("pnl_floor", 1.0):
+    if metrics["total_return"] < ag.get("return_floor", 1.0):
         failures.append(
-            f"PnL floor {metrics['total_pnl'] * 100:+.1f}% < +{ag['pnl_floor'] * 100:.0f}%"
+            f"Return floor {metrics['total_return'] * 100:+.1f}% < +{ag['return_floor'] * 100:.0f}%"
         )
     if (
         metrics["sharpe"] > 0
@@ -299,7 +299,8 @@ def decide_keep_discard(current: dict, baseline: dict, profile: dict) -> str:
             "ic": "position_ic",
             "position_ic": "position_ic",
             "omega": "omega",
-            "total_pnl": "total_pnl",
+            "total_pnl": "total_return",
+            "total_return": "total_return",
         }.get(guard["metric"], guard["metric"])
         tol = guard.get("tolerance", 0)
         if key == "total_pnl" and baseline.get(key, 0) > 0:
@@ -320,17 +321,17 @@ def decide_keep_discard(current: dict, baseline: dict, profile: dict) -> str:
 # ═══════════════════════════════════════════════════════════════════
 
 
-def _sharpe(pnl):
+def _sharpe(pnl, periods_per_year=252):
     s = np.std(pnl, ddof=1)
-    return float(np.mean(pnl) / s * np.sqrt(252)) if s > 0 else 0
+    return float(np.mean(pnl) / s * np.sqrt(periods_per_year)) if s > 0 else 0
 
 
-def _sortino(pnl):
+def _sortino(pnl, periods_per_year=252):
     down = pnl[pnl < 0]
     if len(down) < 2:
         return 0.0
     ds = np.std(down, ddof=1)
-    return float(np.mean(pnl) / ds * np.sqrt(252)) if ds > 1e-10 else 0.0
+    return float(np.mean(pnl) / ds * np.sqrt(periods_per_year)) if ds > 1e-10 else 0.0
 
 
 def _max_true_run(mask) -> int:

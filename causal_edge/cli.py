@@ -165,7 +165,7 @@ def validate(strategy, verbose, csv_path, dsr_trials, export_path, config):
                     "sharpe",
                     "lo_adjusted",
                     "sortino",
-                    "total_pnl",
+                    "total_return",
                     "max_dd",
                     "calmar",
                     "dsr",

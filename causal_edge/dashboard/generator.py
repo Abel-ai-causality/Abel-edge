@@ -16,6 +16,7 @@ from causal_edge.dashboard.components import (
     equity_chart,
     position_chart,
 )
+from causal_edge.validation.metrics import detect_profile, load_profile
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 
@@ -44,13 +45,20 @@ def _prepare_strategy(s_cfg: dict) -> dict:
         }
 
     pnl = df["pnl"].values.astype(float)
+    asset_returns = (
+        df["asset_return"].values.astype(float) if "asset_return" in df.columns else None
+    )
     positions = (
         df["position"].values.astype(float) if "position" in df.columns else np.zeros(len(pnl))
     )
     dates = pd.DatetimeIndex(df["date"])
     cum_return = np.cumprod(1.0 + pnl) - 1.0
 
-    metrics = compute_metrics(pnl)
+    profile_name = detect_profile(pnl, dates, asset_returns=asset_returns)
+    profile = load_profile(profile_name)
+    periods_per_year = profile.get("validation", {}).get("periods_per_year", 252)
+
+    metrics = compute_metrics(pnl, periods_per_year=periods_per_year)
 
     return {
         "id": s_cfg["id"],

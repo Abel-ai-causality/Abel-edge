@@ -34,7 +34,7 @@ def _hex_to_rgba(hex_color: str, alpha: float) -> str:
     return f"rgba({r},{g},{b},{alpha})"
 
 
-def compute_metrics(pnl: np.ndarray) -> dict:
+def compute_metrics(pnl: np.ndarray, periods_per_year: int = 252) -> dict:
     """Compute standard metrics from a PnL array of daily simple returns.
 
     Returns dict with: sharpe, cum_return, max_dd, win_rate, n_trades, n_days.
@@ -45,7 +45,7 @@ def compute_metrics(pnl: np.ndarray) -> dict:
     equity = np.cumprod(1.0 + pnl)
     cum_return = equity - 1.0
     std = np.std(pnl, ddof=1) if len(pnl) > 1 else 0.0
-    sharpe = float(np.mean(pnl) / std * np.sqrt(252)) if std > 0 else 0.0
+    sharpe = float(np.mean(pnl) / std * np.sqrt(periods_per_year)) if std > 0 else 0.0
 
     peak = np.maximum.accumulate(equity)
     dd = (equity / peak) - 1.0

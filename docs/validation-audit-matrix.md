@@ -16,7 +16,7 @@ It records the audited live contract after remediation of gates, metrics, profil
 | Surface | File | Audited state |
 |---|---|---|
 | Metric computation | `causal_edge/validation/metrics.py` | Live metric payload includes explicit `ic_applicable` semantics |
-| Gate evaluation | `causal_edge/validation/metrics.py` | Live failures are T6/T13/T14/T15-Lo/T15-Omega/T15-MaxDD plus `PnL floor`, `Sharpe/Lo`, and conditional `IC`/`IC stab` |
+| Gate evaluation | `causal_edge/validation/metrics.py` | Live failures are T6/T13/T14/T15-Lo/T15-Omega/T15-MaxDD plus `Return floor`, `Sharpe/Lo`, and conditional `IC`/`IC stab` |
 | Result contract | `causal_edge/validation/gate.py` | `validate_strategy()` returns `verdict`, `score`, `failures`, `metrics`, `triangle`, `profile` |
 | Score denominator | `causal_edge/validation/gate.py` | `_count_total()` yields `7` checks base, adds `+1` when `omega_applicable`, adds `+1` when `loss_years_applicable`, and adds `+2` when `ic_applicable` is true |
 | Profiles | `causal_edge/validation/profiles/*.yaml` | Only justified live keys remain; orphan keys were removed and deferred |
@@ -41,7 +41,7 @@ It records the audited live contract after remediation of gates, metrics, profil
 | `sharpe` | keep | Core retained ratio metric |
 | `lo_adjusted` | rebuild | Retained ratio metric, simplified to a profile-aware lag-1 serial-correlation penalty |
 | `sortino` | keep | Retained as diagnostic payload metric |
-| `total_pnl` | keep | Retained as live anti-gaming input |
+| `total_return` | keep | Retained as live anti-gaming input using compounded strategy return |
 | `max_dd` | rebuild | Unified to wealth-path percentage drawdown; runtime stores a non-positive fraction while reports display the absolute percentage |
 | `calmar` | rebuild | Retained but zero-drawdown sentinel normalized to `0.0` |
 | `dsr` | rebuild | Retained as a live overfitting gate with operator-supplied `dsr_trials` override and profile-default fallback |
@@ -81,7 +81,7 @@ It records the audited live contract after remediation of gates, metrics, profil
 | `T15 Lo` | keep | Live documented gate |
 | `T15 Omega` | rebuild | Live only when `omega_applicable` is true |
 | `T15 MaxDD` | keep | Live documented gate |
-| `PnL floor` | keep | Live anti-gaming gate; retained and documented as non-T-coded failure |
+| `Return floor` | keep | Live anti-gaming gate; retained and documented as non-T-coded failure |
 | `Sharpe/Lo` | keep | Live anti-gaming gate; retained and documented as non-T-coded failure |
 | `IC` | clarify | Live only when `ic_applicable` is true |
 | `IC stab` | clarify | Live only when `ic_applicable` is true |

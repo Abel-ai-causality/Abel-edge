@@ -15,7 +15,7 @@ metric_triangle:
     - {metric: omega, tolerance: 0.05}
 
 anti_gaming:
-  pnl_floor: 0.05
+  return_floor: 0.05
   max_dd_gate: -0.05                            # absolute gate (HFT: very tight)
   sharpe_lo_ratio_max: 5.0       # HFT has minimal serial corr
   position_ic_min: 0.01

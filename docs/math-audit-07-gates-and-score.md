@@ -25,7 +25,7 @@ The live gate applies these checks:
 - `T15 Lo`
 - `T15 Omega`
 - `T15 MaxDD`
-- `PnL floor`
+- `Return floor`
 - `Sharpe/Lo`
 - conditional `PositionIC`
 - conditional `PositionIC stab`
