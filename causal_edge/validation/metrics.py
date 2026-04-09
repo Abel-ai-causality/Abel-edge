@@ -71,7 +71,7 @@ def compute_all_metrics(
     """Compute all strategy metrics from a PnL array.
 
     Args:
-        pnl: daily log-return PnL array
+        pnl: daily simple-return strategy PnL array
         dates: DatetimeIndex aligned with pnl
         positions: optional position array for IC computation
 
@@ -85,8 +85,10 @@ def compute_all_metrics(
     if positions is not None:
         positions = np.nan_to_num(positions, nan=0.0, posinf=0.0, neginf=0.0)
 
-    cum = np.cumsum(pnl)
-    dd = cum - np.maximum.accumulate(cum)
+    equity = np.cumprod(1.0 + pnl)
+    cum_return = equity - 1.0
+    peak_equity = np.maximum.accumulate(equity)
+    dd = (equity / peak_equity) - 1.0
     std = np.std(pnl, ddof=1)
     validation_cfg = (profile or {}).get("validation", {})
     periods_per_year = validation_cfg.get("periods_per_year", 252)
@@ -94,8 +96,8 @@ def compute_all_metrics(
     sharpe = float(np.mean(pnl) / std * np.sqrt(periods_per_year)) if std > 0 else 0
     sortino = _sortino(pnl)
     max_dd = float(np.min(dd))
-    calmar = float(cum[-1] / abs(max_dd)) if max_dd < 0 else 0.0
-    total_pnl = float(cum[-1])
+    total_pnl = float(cum_return[-1])
+    calmar = float(total_pnl / abs(max_dd)) if max_dd < 0 else 0.0
 
     # Simplified serial-correlation penalty: lag-1 autocorrelation only.
     rho1 = pd.Series(pnl).autocorr(lag=1)
@@ -117,7 +119,7 @@ def compute_all_metrics(
         year_dates = dates[mask]
         year_pnl = pnl[mask]
         yearly_sharpes[yr] = _sharpe(year_pnl)
-        total_year_pnl = float(np.sum(year_pnl))
+        total_year_pnl = float(np.cumprod(1.0 + year_pnl)[-1] - 1.0)
         yearly_pnl[yr] = total_year_pnl
         if _is_full_calendar_year(year_dates):
             full_years_count += 1
@@ -126,7 +128,7 @@ def compute_all_metrics(
     loss_years_applicable = full_years_count > 0
 
     # Drawdown-time stability: fraction of bars underwater and longest underwater spell.
-    underwater = cum < (np.maximum.accumulate(cum) - 1e-12)
+    underwater = equity < (peak_equity - 1e-12)
     drawdown_time_frac = float(np.mean(underwater)) if T > 0 else 0.0
     max_drawdown_duration_bars = _max_true_run(underwater)
 

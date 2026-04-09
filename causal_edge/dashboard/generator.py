@@ -48,7 +48,7 @@ def _prepare_strategy(s_cfg: dict) -> dict:
         df["position"].values.astype(float) if "position" in df.columns else np.zeros(len(pnl))
     )
     dates = pd.DatetimeIndex(df["date"])
-    cum_pnl = np.cumsum(pnl)
+    cum_return = np.cumprod(1.0 + pnl) - 1.0
 
     metrics = compute_metrics(pnl)
 
@@ -59,7 +59,7 @@ def _prepare_strategy(s_cfg: dict) -> dict:
         "asset": s_cfg["asset"],
         "has_data": True,
         "metrics": metrics,
-        "equity_json": equity_chart(dates, cum_pnl, s_cfg["name"], s_cfg["color"]),
+        "equity_json": equity_chart(dates, cum_return, s_cfg["name"], s_cfg["color"]),
         "position_json": position_chart(dates, positions, s_cfg["name"], s_cfg["color"]),
         "latest_date": str(dates[-1].date()) if len(dates) > 0 else "N/A",
         "latest_position": float(positions[-1]) if len(positions) > 0 else 0,

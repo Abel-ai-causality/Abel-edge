@@ -2,7 +2,7 @@
 
 ## Fastest Path: Validate an Existing Backtest
 
-Already have a CSV with `date` and `pnl` columns? Skip everything — just validate:
+Already have a CSV with `date` and simple-return `pnl` columns? Skip everything — just validate:
 
 ```bash
 causal-edge validate --csv my_backtest.csv

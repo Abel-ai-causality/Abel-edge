@@ -7,7 +7,7 @@ The current validation input is a trade log with a very small schema:
 - `date`
 - `pnl`
 - `position`
-- `cum_pnl`
+- `cum_return`
 - `source`
 
 That is enough for absolute path metrics, but not enough for benchmark-aware metrics
@@ -42,7 +42,7 @@ validator can reconstruct benchmark returns and cross-check strategy math.
 ### Recommended derived columns
 
 - `return_1bar`
-- `cum_pnl`
+- `cum_return`
 
 ## Why Store Both `price` And `pnl`
 

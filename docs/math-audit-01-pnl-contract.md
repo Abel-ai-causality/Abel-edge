@@ -48,7 +48,7 @@ causally lagged.
 - `date`
 - `pnl`
 - `position`
-- `cum_pnl = cumsum(pnl)`
+- `cum_return = cumprod(1 + pnl) - 1`
 - `source`
 
 The trade log is then the sole input to validation.
@@ -58,12 +58,12 @@ The trade log is then the sole input to validation.
 1. The no-look-ahead rule is contractual, not mechanically enforced at runtime.
 2. Validation trusts `pnl` as already correct and does not independently test
    signal timing.
-3. The docs often say "daily log-return PnL", but some engines emit simple returns.
-   That creates a unit mismatch between documentation and runtime behavior.
+3. The contract must stay explicit that `pnl` is a simple-return strategy series,
+   with path metrics derived from `cumprod(1 + pnl)` rather than `cumsum(pnl)`.
 
 ## Audit Questions
 
 1. Do we want the framework contract to remain "engine is responsible for shift(1)"?
 2. Should runtime add optional assertions that try to catch obvious timing mistakes?
-3. Should the public contract say "return series" instead of "log-return series"
-   unless the engine is explicitly required to emit log returns?
+3. Should the public contract consistently say "simple-return strategy series" now
+   that path metrics are derived from compounding rather than additive accumulation?

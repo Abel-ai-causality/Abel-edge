@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 
 
-REQUIRED_COLUMNS = ("date", "pnl", "position", "cum_pnl", "source")
+REQUIRED_COLUMNS = ("date", "pnl", "position", "cum_return", "source")
 
 
 def read_trade_log(path: str | Path) -> pd.DataFrame:
@@ -36,11 +36,13 @@ def write_trade_log(
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    df = pd.DataFrame({
-        "date": dates,
-        "pnl": pnl,
-        "position": positions,
-        "cum_pnl": np.cumsum(pnl),
-        "source": source,
-    })
+    df = pd.DataFrame(
+        {
+            "date": dates,
+            "pnl": pnl,
+            "position": positions,
+            "cum_return": np.cumprod(1.0 + pnl) - 1.0,
+            "source": source,
+        }
+    )
     df.to_csv(path, index=False)

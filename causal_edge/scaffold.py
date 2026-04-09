@@ -173,7 +173,7 @@ class SMAEngine(StrategyEngine):
     def compute_signals(self):
         rng = np.random.default_rng(42)
         returns = rng.normal(0.0005, 0.02, self.n_days)
-        prices = 100.0 * np.exp(np.cumsum(returns))
+        prices = 100.0 * np.cumprod(1.0 + returns)
         dates = pd.bdate_range(end=pd.Timestamp.today(), periods=self.n_days)
         fast_ma = pd.Series(prices).rolling(self.fast).mean().shift(1).values
         slow_ma = pd.Series(prices).rolling(self.slow).mean().shift(1).values

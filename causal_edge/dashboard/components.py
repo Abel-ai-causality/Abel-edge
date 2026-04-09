@@ -35,22 +35,21 @@ def _hex_to_rgba(hex_color: str, alpha: float) -> str:
 
 
 def compute_metrics(pnl: np.ndarray) -> dict:
-    """Compute standard metrics from a PnL array of daily log returns.
+    """Compute standard metrics from a PnL array of daily simple returns.
 
-    Returns dict with: sharpe, cum_pnl, max_dd, win_rate, n_trades, n_days.
+    Returns dict with: sharpe, cum_return, max_dd, win_rate, n_trades, n_days.
     """
     if len(pnl) == 0:
-        return dict(sharpe=0, cum_pnl=0, max_dd=0, win_rate=0, n_trades=0, n_days=0)
+        return dict(sharpe=0, cum_return=0, max_dd=0, win_rate=0, n_trades=0, n_days=0)
 
-    cum = np.cumsum(pnl)
+    equity = np.cumprod(1.0 + pnl)
+    cum_return = equity - 1.0
     std = np.std(pnl, ddof=1) if len(pnl) > 1 else 0.0
     sharpe = float(np.mean(pnl) / std * np.sqrt(252)) if std > 0 else 0.0
 
-    # MaxDD on equity curve
-    equity = np.exp(cum)
     peak = np.maximum.accumulate(equity)
-    dd = (peak - equity) / peak
-    max_dd = float(np.max(dd)) if len(dd) > 0 else 0.0
+    dd = (equity / peak) - 1.0
+    max_dd = float(np.min(dd)) if len(dd) > 0 else 0.0
 
     active = pnl[np.abs(pnl) > 1e-10]
     win_rate = float(np.mean(active > 0)) if len(active) > 0 else 0.0
@@ -58,20 +57,20 @@ def compute_metrics(pnl: np.ndarray) -> dict:
 
     return dict(
         sharpe=round(sharpe, 2),
-        cum_pnl=round(float(cum[-1]), 4),
-        max_dd=round(max_dd, 4),
+        cum_return=round(float(cum_return[-1]), 4),
+        max_dd=round(abs(max_dd), 4),
         win_rate=round(win_rate, 3),
         n_trades=n_trades,
         n_days=len(pnl),
     )
 
 
-def equity_chart(dates, cum_pnl, name: str, color: str) -> str:
+def equity_chart(dates, cum_return, name: str, color: str) -> str:
     """Equity curve chart. Returns JSON string.
 
     Args:
         dates: array-like of dates
-        cum_pnl: array-like of cumulative PnL values
+        cum_return: array-like of cumulative return values
         name: strategy name for legend
         color: hex color string
     """
@@ -82,7 +81,7 @@ def equity_chart(dates, cum_pnl, name: str, color: str) -> str:
     fig.add_trace(
         go.Scatter(
             x=list(dates),
-            y=list(cum_pnl),
+            y=list(cum_return),
             mode="lines",
             name=name,
             line=dict(color=color, width=2),

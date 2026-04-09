@@ -75,8 +75,8 @@
                         <td>{{ s.asset }}</td>
                         {% if s.has_data %}
                         <td>{{ "%.2f"|format(s.metrics.sharpe) }}</td>
-                        <td class="{{ 'pnl-pos' if s.metrics.cum_pnl > 0 else 'pnl-neg' }}">
-                            {{ fmt_pnl_pct(s.metrics.cum_pnl) }}
+                        <td class="{{ 'pnl-pos' if s.metrics.cum_return > 0 else 'pnl-neg' }}">
+                            {{ fmt_pnl_pct(s.metrics.cum_return) }}
                         </td>
                         <td class="pnl-neg">-{{ "%.1f"|format(s.metrics.max_dd * 100) }}%</td>
                         <td>{{ "%.0f"|format(s.metrics.win_rate * 100) }}%</td>
