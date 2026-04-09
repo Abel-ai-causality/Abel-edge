@@ -16,7 +16,6 @@ Anti-gaming:
 """
 
 import os
-from itertools import combinations
 
 import numpy as np
 import pandas as pd
@@ -106,7 +105,6 @@ def compute_all_metrics(
 
     dsr_trials_used = dsr_trials if dsr_trials is not None else validation_cfg.get("dsr_K", 300)
     dsr = _dsr(pnl, T, K=dsr_trials_used, periods_per_year=periods_per_year)
-    pbo, _ = _cpcv(pnl, n_groups=16)
 
     # Year-by-year stability
     loss_years = 0
@@ -161,7 +159,6 @@ def compute_all_metrics(
         "calmar": calmar,
         "dsr": dsr,
         "dsr_trials_used": int(dsr_trials_used),
-        "pbo": pbo,
         "loss_years": loss_years,
         "neg_roll_frac": neg_roll_frac,
         "omega": omega,
@@ -192,8 +189,6 @@ def validate(metrics: dict, profile: dict) -> tuple[bool, list[str]]:
 
     if metrics["dsr"] < v.get("dsr_min", 0.90):
         failures.append(f"T6 DSR {metrics['dsr']:.1%} < {v['dsr_min']:.0%}")
-    if metrics["pbo"] > v.get("pbo_max", 0.10):
-        failures.append(f"T7 PBO {metrics['pbo']:.1%} > {v['pbo_max']:.0%}")
     if metrics["neg_roll_frac"] > v.get("neg_roll_frac_max", 0.15):
         failures.append(
             f"T13 NegRoll {metrics['neg_roll_frac']:.0%} > {v['neg_roll_frac_max']:.0%}"
@@ -296,29 +291,6 @@ def _dsr(pnl, T, K=300, periods_per_year=252):
     emax = ((1 - gamma) * z1 + gamma * z2) / np.sqrt(T)
     var_sr = (1 / T) * (1 - skew * sr_d + (raw_kurt / 4) * sr_d**2)
     return float(sp_stats.norm.cdf((sr_d - emax) / np.sqrt(max(var_sr, 1e-20))))
-
-
-def _cpcv(pnl, n_groups=16):
-    """PnL-path CPCV. Returns (PBO, oos_sharpes)."""
-    T = len(pnl)
-    while n_groups > 4 and T // n_groups < 20:
-        n_groups -= 2
-    if T // n_groups < 10:
-        return 0.0, []
-    gs = T // n_groups
-    gst = [j * gs for j in range(n_groups)]
-    gen = [min((j + 1) * gs, T) for j in range(n_groups)]
-    gen[-1] = T
-    oos_sharpes = []
-    for tg in combinations(range(n_groups), 2):
-        tm = np.zeros(T, dtype=bool)
-        for g in tg:
-            tm[gst[g] : gen[g]] = True
-        o = pnl[tm]
-        s = np.std(o, ddof=1)
-        oos_sharpes.append(np.mean(o) / s * np.sqrt(252) if s > 0 else 0)
-    pbo = float(np.mean(np.array(oos_sharpes) <= 0))
-    return pbo, oos_sharpes
 
 
 def _hill_estimator(pnl, quantile=0.05):

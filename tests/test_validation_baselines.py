@@ -141,12 +141,13 @@ def test_defer_candidate_metrics_are_not_gate_failures() -> None:
     assert "cvar_var_ratio" not in result["metrics"]
     assert "hill_alpha" not in joined
     assert "cvar_var_ratio" not in joined
+    assert "T7 PBO" not in joined
 
 
 def test_public_claim_denominator_drift_is_visible() -> None:
     result = validate_strategy(FIXTURES / "positive_daily.csv", profile="equity_daily")
     denominator = int(result["score"].split("/")[1])
-    assert denominator == 11
+    assert denominator == 10
 
 
 def test_removed_oos_family_metrics_are_not_in_payload() -> None:
@@ -154,6 +155,11 @@ def test_removed_oos_family_metrics_are_not_in_payload() -> None:
     assert "oos_is" not in metrics
     assert "is_sharpe" not in metrics
     assert "oos_sharpe" not in metrics
+
+
+def test_removed_pbo_metric_is_not_in_payload() -> None:
+    metrics = _compute("positive_daily.csv")
+    assert "pbo" not in metrics
 
 
 def test_validate_strategy_reports_explicit_dsr_trials_used() -> None:

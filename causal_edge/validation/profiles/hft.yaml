@@ -25,7 +25,6 @@ validation:
   periods_per_year: 252
   dsr_min: 0.90
   dsr_K: 1000                    # HFT typically explores many configs
-  pbo_max: 0.10
   neg_roll_frac_max: 0.10
   max_loss_years: 1              # HFT should not have loss years
   lo_adjusted_min: 0.0           # Lo not meaningful for tick data

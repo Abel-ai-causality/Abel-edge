@@ -4,11 +4,13 @@
 
 ### Changed
 - **Validation contract migration**: `validate` no longer uses the legacy `20/21`-style denominator narrative. The audited live contract now reports denominators based on applicable gates: typically `9` when the IC family is not applicable and `11` when the IC family is applicable.
+- **Validation contract migration**: `validate` no longer uses the legacy `20/21`-style denominator narrative. The audited live contract now reports denominators based on applicable gates: typically `8` when the IC family is not applicable and `10` when the IC family is applicable.
 - **Mathematical corrections**: no-loss `omega` and zero-drawdown `calmar` now normalize to `0.0` instead of sentinel `999`, and constant-series `skew` now normalizes to `0.0` instead of `NaN`.
 - **Applicability semantics**: IC-family behavior is now explicit via `metrics["ic_applicable"]` rather than inferred from zero-valued IC metrics.
 
 ### Removed / Deferred
 - **Unsupported live gate removed**: `T12 OOS/IS` and its split-Sharpe payload family (`oos_is`, `is_sharpe`, `oos_sharpe`) were removed because a final PnL path does not carry defensible IS/OOS provenance.
+- **Unsupported live gate removed**: `T7 PBO` and its payload/config family (`pbo`, `_cpcv()`, `validation.pbo_max`) were removed because a single strategy trade log cannot supply the candidate-by-fold structure required for true PBO.
 - **Orphaned profile key deferred**: `validation.oos_is_min` was removed from live profiles and recorded in `causal_edge/validation/deferred_registry.yaml`.
 - **Unsupported live gate removed**: `Bootstrap p` is no longer part of live validation because it lacked a profile-configurable threshold and public/operator contract.
 - **Unused profile keys deferred**: `validation.permutation_trials`, `validation.permutation_p_max`, `validation.look_ahead_mag_corr_max`, `validation.look_ahead_hit_rate_max`, and `anti_gaming.relative_pnl_drop_max` were removed from live profiles and recorded in `causal_edge/validation/deferred_registry.yaml`.

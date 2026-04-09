@@ -16,9 +16,9 @@ It records the audited live contract after remediation of gates, metrics, profil
 | Surface | File | Audited state |
 |---|---|---|
 | Metric computation | `causal_edge/validation/metrics.py` | Live metric payload includes explicit `ic_applicable` semantics |
-| Gate evaluation | `causal_edge/validation/metrics.py` | Live failures are T6/T7/T13/T14/T15-Lo/T15-Omega/T15-MaxDD plus `PnL floor`, `Sharpe/Lo`, and conditional `IC`/`IC stab` |
+| Gate evaluation | `causal_edge/validation/metrics.py` | Live failures are T6/T13/T14/T15-Lo/T15-Omega/T15-MaxDD plus `PnL floor`, `Sharpe/Lo`, and conditional `IC`/`IC stab` |
 | Result contract | `causal_edge/validation/gate.py` | `validate_strategy()` returns `verdict`, `score`, `failures`, `metrics`, `triangle`, `profile` |
-| Score denominator | `causal_edge/validation/gate.py` | `_count_total()` yields `9` checks base, `11` when `ic_applicable` is true |
+| Score denominator | `causal_edge/validation/gate.py` | `_count_total()` yields `8` checks base, `10` when `ic_applicable` is true |
 | Profiles | `causal_edge/validation/profiles/*.yaml` | Only justified live keys remain; orphan keys were removed and deferred |
 | CLI/report contract | `causal_edge/cli.py`, `causal_edge/validation/gate.py` | No-position verbose output omits IC-family diagnostics |
 | Public claims | `README.md`, `CAPABILITY.md`, `causal_edge/validation/AGENTS.md`, `causal_edge/validation/__init__.py` | Active public wording matches the audited live contract |
@@ -27,7 +27,7 @@ It records the audited live contract after remediation of gates, metrics, profil
 
 | Item | Final state | Evidence |
 |---|---|---|
-| Score denominator | `9` without IC applicability, `11` with IC applicability | `causal_edge/validation/gate.py`, `tests/test_validation_contract.py` |
+| Score denominator | `8` without IC applicability, `10` with IC applicability | `causal_edge/validation/gate.py`, `tests/test_validation_contract.py` |
 | Removed OOS/IS family | `oos_is`, `is_sharpe`, `oos_sharpe`, `T12 OOS/IS`, and `validation.oos_is_min` were removed from the live contract and deferred | `causal_edge/validation/metrics.py`, profile YAMLs, `causal_edge/validation/deferred_registry.yaml` |
 | IC applicability | Explicit `metrics["ic_applicable"]` controls IC-family counting and failures | `causal_edge/validation/metrics.py`, `tests/test_validation_contract.py` |
 | Removed bootstrap gate | No longer affects live failures or denominator | `causal_edge/validation/metrics.py`, `causal_edge/validation/gate.py`, `causal_edge/validation/deferred_registry.yaml` |
@@ -45,7 +45,7 @@ It records the audited live contract after remediation of gates, metrics, profil
 | `max_dd` | keep | Retained as live gate and keep/discard input |
 | `calmar` | rebuild | Retained but zero-drawdown sentinel normalized to `0.0` |
 | `dsr` | rebuild | Retained as a live overfitting gate with operator-supplied `dsr_trials` override and profile-default fallback |
-| `pbo` | keep | Retained live gate metric |
+| `pbo` | defer | Removed from the live payload because a single strategy trade log does not provide the candidate-by-fold structure required for true PBO |
 | `oos_is` | defer | Removed from the live payload because a final PnL path does not establish defensible in-sample/out-of-sample provenance |
 | `loss_years` | keep | Retained live gate metric |
 | `neg_roll_frac` | keep | Retained live gate metric |
@@ -71,7 +71,7 @@ It records the audited live contract after remediation of gates, metrics, profil
 | Gate / failure | Verdict | Rationale |
 |---|---|---|
 | `T6 DSR` | keep | Live documented overfitting gate; caller may override exploration count via `dsr_trials` |
-| `T7 PBO` | keep | Live documented gate |
+| `T7 PBO` | defer | Removed from live validation because the runtime input contract cannot support a true PBO calculation |
 | `T12 OOS/IS` | defer | Removed from live validation because half-split Sharpe ratio lacked a defensible sample-in/sample-out contract |
 | `T13 NegRoll` | keep | Live documented gate |
 | `T14 LossYrs` | keep | Live documented gate |
@@ -89,6 +89,7 @@ It records the audited live contract after remediation of gates, metrics, profil
 | Key family | Verdict | Final state |
 |---|---|---|
 | `validation.dsr_K` | keep | Retained as the default exploration-count prior when `dsr_trials` is not explicitly provided |
+| `validation.pbo_max` | defer | Removed from live YAML because the `T7 PBO` gate was removed for input-contract mismatch |
 | `validation.periods_per_year` | keep | Added as the profile-supplied annualization contract for Sharpe-family metrics |
 | `validation.oos_is_min` | defer | Removed from live YAML after T12 OOS/IS was dropped from the contract |
 | `validation.permutation_*` | defer | Removed from live YAML; tracked in deferred registry |
@@ -100,7 +101,7 @@ It records the audited live contract after remediation of gates, metrics, profil
 | Surface | Final audited message |
 |---|---|
 | `README.md` | Validation uses the audited live contract; no active `15-test` or `21`-style wording remains |
-| `CAPABILITY.md` | Examples describe `9/11`-style applicable-gate denominators and migration notes |
+| `CAPABILITY.md` | Examples describe `8/10`-style applicable-gate denominators and migration notes |
 | `causal_edge/validation/AGENTS.md` | Operator guidance references the audited live contract and deferred registry |
 | `causal_edge/validation/__init__.py` | Exported docstring describes applicable-gate denominator semantics |
 | `CHANGELOG.md` | Migration and comparability notes explain denominator and sentinel changes |
@@ -111,9 +112,12 @@ The following items were removed from the live contract and are tracked in `caus
 
 - `hill_alpha`
 - `cvar_var_ratio`
+- `pbo`
 - `oos_is`
 - `is_sharpe`
 - `oos_sharpe`
+- `T7 PBO`
+- `validation.pbo_max`
 - `T12 OOS/IS`
 - `validation.oos_is_min`
 - `Bootstrap p` gate
@@ -127,7 +131,8 @@ The following items were removed from the live contract and are tracked in `caus
 
 | Item | Change type | Migration note |
 |---|---|---|
-| Score denominator narrative | mathematical correction | Live contract is `9/11` by applicable-gate scope, not legacy `15` / `20` / `21` wording |
+| Score denominator narrative | mathematical correction | Live contract is `8/10` by applicable-gate scope, not legacy `15` / `20` / `21` wording |
+| `PBO` family | removal/defer | `pbo`, `_cpcv()`, `T7 PBO`, and `validation.pbo_max` were removed because a single strategy trade log cannot support a true PBO contract |
 | `OOS/IS` family | removal/defer | `oos_is`, `is_sharpe`, `oos_sharpe`, `T12 OOS/IS`, and `validation.oos_is_min` were removed because a final PnL path could not justify a true IS/OOS claim |
 | `lo_adjusted` simplification | mathematical correction | Fixed-252, 10-lag approximation was replaced with a profile-aware lag-1 serial-correlation penalty |
 | `dsr_trials` override | clarification | DSR now accepts caller-supplied exploration counts and falls back to the profile default only when no explicit declaration is provided |

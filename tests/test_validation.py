@@ -179,7 +179,6 @@ class TestComputeAllMetrics:
             "calmar",
             "dsr",
             "dsr_trials_used",
-            "pbo",
             "loss_years",
             "neg_roll_frac",
             "omega",

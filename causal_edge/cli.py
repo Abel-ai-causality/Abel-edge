@@ -170,7 +170,6 @@ def validate(strategy, verbose, csv_path, dsr_trials, export_path, config):
                     "calmar",
                     "dsr",
                     "dsr_trials_used",
-                    "pbo",
                     "omega",
                     "ic",
                     "ic_hit_rate",
