@@ -185,6 +185,7 @@ class TestComputeAllMetrics:
             "drawdown_time_frac",
             "max_drawdown_duration_bars",
             "omega",
+            "omega_applicable",
             "skew",
             "sharpe_lo_ratio",
             "bootstrap_p",

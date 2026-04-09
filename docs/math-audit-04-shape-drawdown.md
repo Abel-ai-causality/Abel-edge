@@ -48,7 +48,8 @@ active = pnl[abs(pnl) > 1e-10]
 omega = sum(active[active > 0]) / abs(sum(active[active < 0]))
 ```
 
-If there are no losses, the implementation returns `0.0`.
+If there are no losses, the payload keeps `omega = 0.0` but marks
+`omega_applicable = False`, and the live gate does not count `T15 Omega` for that run.
 
 ### Skew and tail diagnostics
 
@@ -60,15 +61,17 @@ the returned metrics payload.
 1. Validation `max_dd` is in cumulative-return space, but dashboard `max_dd` is a
    percentage drawdown on an equity curve. The repo therefore has two different
    drawdown meanings.
-2. `omega = 0.0` when there are no losses is a deterministic sentinel, not the usual
-   mathematical limit.
-3. The code computes `var_5` and `cvar_5` but does not expose them in the payload.
-4. The current Omega is a simplified discrete zero-threshold version, not the more
+2. The current Omega is a simplified discrete zero-threshold version, not the more
    general continuous-threshold Omega definition.
+3. The code computes `var_5` and `cvar_5` but does not expose them in the payload.
+4. Relative-Omega comparisons against long-only benchmarks require richer trade-log
+   schema than the current standalone validator input provides.
 
 ## Audit Questions
 
 1. Should validation and dashboard share one drawdown definition?
 2. Is the current Omega definition sufficient for anti-clipping, or should the docs
    narrow their claim to a simple gain/loss asymmetry ratio?
-3. Should `var_5` and `cvar_5` either be surfaced explicitly or removed from the computation?
+3. Should benchmark-relative Omega be added only after trade logs expose enough schema
+   to reconstruct long-only benchmark returns?
+4. Should `var_5` and `cvar_5` either be surfaced explicitly or removed from the computation?

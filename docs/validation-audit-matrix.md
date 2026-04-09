@@ -18,7 +18,7 @@ It records the audited live contract after remediation of gates, metrics, profil
 | Metric computation | `causal_edge/validation/metrics.py` | Live metric payload includes explicit `ic_applicable` semantics |
 | Gate evaluation | `causal_edge/validation/metrics.py` | Live failures are T6/T13/T14/T15-Lo/T15-Omega/T15-MaxDD plus `PnL floor`, `Sharpe/Lo`, and conditional `IC`/`IC stab` |
 | Result contract | `causal_edge/validation/gate.py` | `validate_strategy()` returns `verdict`, `score`, `failures`, `metrics`, `triangle`, `profile` |
-| Score denominator | `causal_edge/validation/gate.py` | `_count_total()` yields `8` checks base, adds `+1` when `loss_years_applicable`, and adds `+2` when `ic_applicable` is true |
+| Score denominator | `causal_edge/validation/gate.py` | `_count_total()` yields `7` checks base, adds `+1` when `omega_applicable`, adds `+1` when `loss_years_applicable`, and adds `+2` when `ic_applicable` is true |
 | Profiles | `causal_edge/validation/profiles/*.yaml` | Only justified live keys remain; orphan keys were removed and deferred |
 | CLI/report contract | `causal_edge/cli.py`, `causal_edge/validation/gate.py` | No-position verbose output omits IC-family diagnostics |
 | Public claims | `README.md`, `CAPABILITY.md`, `causal_edge/validation/AGENTS.md`, `causal_edge/validation/__init__.py` | Active public wording matches the audited live contract |
@@ -27,7 +27,7 @@ It records the audited live contract after remediation of gates, metrics, profil
 
 | Item | Final state | Evidence |
 |---|---|---|
-| Score denominator | `8` without IC applicability, `10` with IC applicability, plus `+1` when `LossYrs` is applicable | `causal_edge/validation/gate.py`, `tests/test_validation_contract.py` |
+| Score denominator | `7` without IC applicability, `9` with IC applicability, plus `+1` each when `Omega` or `LossYrs` is applicable | `causal_edge/validation/gate.py`, `tests/test_validation_contract.py` |
 | Removed OOS/IS family | `oos_is`, `is_sharpe`, `oos_sharpe`, `T12 OOS/IS`, and `validation.oos_is_min` were removed from the live contract and deferred | `causal_edge/validation/metrics.py`, profile YAMLs, `causal_edge/validation/deferred_registry.yaml` |
 | IC applicability | Explicit `metrics["ic_applicable"]` controls IC-family counting and failures | `causal_edge/validation/metrics.py`, `tests/test_validation_contract.py` |
 | Removed bootstrap gate | No longer affects live failures or denominator | `causal_edge/validation/metrics.py`, `causal_edge/validation/gate.py`, `causal_edge/validation/deferred_registry.yaml` |
@@ -50,7 +50,7 @@ It records the audited live contract after remediation of gates, metrics, profil
 | `loss_years` | rebuild | Replaced negative-yearly-Sharpe counting with full-calendar-year negative PnL counting and explicit applicability |
 | `drawdown_time_frac` | rebuild | Replaced rolling-Sharpe heuristic with direct underwater bar fraction |
 | `max_drawdown_duration_bars` | rebuild | Added longest underwater spell in bars as a second drawdown-time gate |
-| `omega` | rebuild | Retained but no-loss sentinel normalized to `0.0` |
+| `omega` | rebuild | Retained as empirical hurdle-0 Omega with explicit applicability when loss mass exists |
 | `skew` | rebuild | Retained diagnostic metric with constant-series normalization |
 | `sharpe_lo_ratio` | keep | Retained anti-gaming gate input |
 | `bootstrap_p` | clarify | Retained as diagnostic metric only; removed from live gate logic |
@@ -79,7 +79,7 @@ It records the audited live contract after remediation of gates, metrics, profil
 | `T13 MaxDDDuration` | keep | Live documented gate on longest underwater spell |
 | `T14 LossYrs` | rebuild | Live gate only when at least one full calendar year is present |
 | `T15 Lo` | keep | Live documented gate |
-| `T15 Omega` | keep | Live documented gate |
+| `T15 Omega` | rebuild | Live only when `omega_applicable` is true |
 | `T15 MaxDD` | keep | Live documented gate |
 | `PnL floor` | keep | Live anti-gaming gate; retained and documented as non-T-coded failure |
 | `Sharpe/Lo` | keep | Live anti-gaming gate; retained and documented as non-T-coded failure |
@@ -106,7 +106,7 @@ It records the audited live contract after remediation of gates, metrics, profil
 | Surface | Final audited message |
 |---|---|
 | `README.md` | Validation uses the audited live contract; no active `15-test` or `21`-style wording remains |
-| `CAPABILITY.md` | Examples describe conditional `8/10` denominators plus `LossYrs` applicability |
+| `CAPABILITY.md` | Examples describe conditional denominators across IC, Omega, and LossYrs applicability |
 | `causal_edge/validation/AGENTS.md` | Operator guidance references the audited live contract and deferred registry |
 | `causal_edge/validation/__init__.py` | Exported docstring describes applicable-gate denominator semantics |
 | `CHANGELOG.md` | Migration and comparability notes explain denominator and sentinel changes |
@@ -139,7 +139,8 @@ The following items were removed from the live contract and are tracked in `caus
 
 | Item | Change type | Migration note |
 |---|---|---|
-| Score denominator narrative | mathematical correction | Live contract denominator is now conditional on `LossYrs` applicability as well as IC applicability |
+| Score denominator narrative | mathematical correction | Live contract denominator is now conditional on `Omega` and `LossYrs` applicability as well as IC applicability |
+| `omega` applicability | mathematical correction | No-loss paths no longer fail `T15 Omega`; the gate activates only when downside loss mass exists |
 | `loss_years` semantics | mathematical correction | Full-year negative PnL count replaced negative-yearly-Sharpe counting, and partial years no longer activate the gate |
 | `neg_roll_frac` family | removal/rebuild | `neg_roll_frac`, `T13 NegRoll`, and `validation.neg_roll_frac_max` were replaced by direct drawdown-time metrics and thresholds |
 | `PBO` family | removal/defer | `pbo`, `_cpcv()`, `T7 PBO`, and `validation.pbo_max` were removed because a single strategy trade log cannot support a true PBO contract |

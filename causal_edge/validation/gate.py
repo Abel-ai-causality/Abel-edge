@@ -42,7 +42,7 @@ def validate_strategy(
 
     Returns dict with:
         verdict: "PASS" or "FAIL"
-        score: "N/M" (e.g. "6/8")
+        score: "N/M" (e.g. "6/7")
         failures: list of failure message strings
         metrics: full metrics dict
         triangle: {ratio, rank, shape} — the three leverage-invariant dims
@@ -180,9 +180,11 @@ def print_validation_report(results: dict) -> None:
 
 def _count_total(metrics: dict, profile: dict) -> int:
     """Count total applicable validation checks."""
-    count = 7  # DSR, DrawdownTime, MaxDDDuration, Lo, Omega, MaxDD, PnL floor
+    count = 6  # DSR, DrawdownTime, MaxDDDuration, Lo, MaxDD, PnL floor
     if metrics.get("loss_years_applicable", False):
         count += 1  # LossYrs
+    if metrics.get("omega_applicable", False):
+        count += 1  # Omega
     count += 1  # Sharpe/Lo ratio
     if metrics.get("ic_applicable", False):
         count += 2  # IC min + IC stability

@@ -20,7 +20,7 @@ from causal_edge.validation.gate import validate_strategy
 
 result = validate_strategy("backtest.csv")  # needs: date, pnl columns
 # result["verdict"]  → "PASS" or "FAIL"
-# result["score"]    → "9/10"  # denominator depends on applicable gates in the audited contract
+# result["score"]    → "8/9"  # denominator depends on applicable gates in the audited contract
 # result["failures"] → ["T6 DSR 12% < 90%", "T13 DrawdownTime 45% > 35%", ...]
 # result["triangle"] → {"ratio": 1.82, "rank": 0.12, "shape": 1.45}
 ```
@@ -71,7 +71,7 @@ When validation fails, apply fixes, revalidate, repeat until stable.
 Three leverage-invariant, orthogonal dimensions (the "metric triangle"):
 - **Lo-adjusted Sharpe** (ratio) — target, corrects for autocorrelation
 - **IC** (rank) — guardrail, catches concentration
-- **Omega** (shape) — guardrail, catches return clipping
+- **Omega** (shape) — guardrail on payoff asymmetry when downside mass exists
 
 No known transformation improves all three except genuine signal improvement.
 
@@ -79,8 +79,9 @@ No known transformation improves all three except genuine signal improvement.
 
 - The audited live contract uses **applicable-gate denominators**, not the old `21`-style narrative.
 - Typical score denominators are:
-  - `8` when the IC family is not applicable
-  - `10` when the IC family is applicable
+  - `7` when only the unconditional gates apply
+  - add `+2` when the IC family is applicable
+  - add `+1` when downside mass exists for `Omega`
   - add `+1` when at least one full calendar year is present for `LossYrs`
 - See `docs/validation-audit-matrix.md` and `CHANGELOG.md` for migration/comparability notes.
 

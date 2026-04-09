@@ -134,11 +134,9 @@ def compute_all_metrics(
     active = pnl[np.abs(pnl) > 1e-10]
     gains = active[active > 0]
     losses = active[active < 0]
-    omega = (
-        float(np.sum(gains) / abs(np.sum(losses)))
-        if len(losses) > 0 and np.sum(losses) != 0
-        else 0.0
-    )
+    loss_mass = float(abs(np.sum(losses)))
+    omega_applicable = len(losses) > 0 and loss_mass > 1e-12
+    omega = float(np.sum(gains) / loss_mass) if omega_applicable else 0.0
 
     # Tail risk
     skew = float(sp_stats.skew(pnl)) if np.std(pnl) > 1e-10 else 0.0
@@ -176,6 +174,7 @@ def compute_all_metrics(
         "drawdown_time_frac": drawdown_time_frac,
         "max_drawdown_duration_bars": max_drawdown_duration_bars,
         "omega": omega,
+        "omega_applicable": omega_applicable,
         "skew": skew,
         "sharpe_lo_ratio": sharpe_lo_ratio,
         "bootstrap_p": bootstrap_p,
@@ -219,7 +218,9 @@ def validate(metrics: dict, profile: dict) -> tuple[bool, list[str]]:
         failures.append(f"T14 LossYrs {metrics['loss_years']} > {v['max_loss_years']}")
     if metrics["lo_adjusted"] < v.get("lo_adjusted_min", 1.0):
         failures.append(f"T15 Lo {metrics['lo_adjusted']:.2f} < {v['lo_adjusted_min']}")
-    if metrics["omega"] < v.get("omega_min", 1.0):
+    if metrics.get("omega_applicable", False) and metrics["omega"] + 1e-12 < v.get(
+        "omega_min", 1.0
+    ):
         failures.append(f"T15 Omega {metrics['omega']:.2f} < {v['omega_min']}")
     if metrics["max_dd"] < v.get("max_dd", -0.20):
         failures.append(f"T15 MaxDD {metrics['max_dd'] * 100:.1f}% < {v['max_dd'] * 100:.0f}%")

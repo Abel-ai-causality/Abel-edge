@@ -37,6 +37,7 @@ def test_positive_daily_baselines() -> None:
     assert metrics["max_dd"] == pytest.approx(0.0, abs=1e-12)
     assert metrics["calmar"] == 0.0
     assert metrics["omega"] == 0.0
+    assert metrics["omega_applicable"] is False
 
 
 def test_clipped_fixture_changes_shape_contract() -> None:
@@ -44,6 +45,7 @@ def test_clipped_fixture_changes_shape_contract() -> None:
     clipped = _compute("positive_clipped.csv")
     assert clipped["sharpe"] == 0.0
     assert clipped["omega"] == pytest.approx(raw["omega"], rel=1e-9)
+    assert clipped["omega_applicable"] is False
     assert clipped["skew"] == 0.0
 
 
@@ -161,7 +163,7 @@ def test_defer_candidate_metrics_are_not_gate_failures() -> None:
 def test_public_claim_denominator_drift_is_visible() -> None:
     result = validate_strategy(FIXTURES / "positive_daily.csv", profile="equity_daily")
     denominator = int(result["score"].split("/")[1])
-    assert denominator == 10
+    assert denominator == 9
 
 
 def test_removed_oos_family_metrics_are_not_in_payload() -> None:

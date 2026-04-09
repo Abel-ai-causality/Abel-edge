@@ -8,7 +8,7 @@ Three leverage-invariant, orthogonal dimensions:
 No known transformation improves all three except genuine signal improvement.
 
 The audited live validation contract uses applicable-gate denominators
-(commonly 8 or 10, rising to 9 or 11 when full-year loss accounting is applicable)
+(commonly 7 or 9, rising when Omega and full-year loss accounting are applicable)
 rather than the older fixed 20/21-style narrative.
 """
 

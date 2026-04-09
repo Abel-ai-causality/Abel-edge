@@ -34,11 +34,12 @@ The live gate applies these checks:
 
 `_count_total()` sets:
 
-- base count `10`
-- base count `9`
+- base count `7`
+- plus `1` if `omega_applicable` is true
+- plus `1` if `loss_years_applicable` is true
 - plus `2` if `ic_applicable` is true
 
-So the live denominator is `9` or `11`, not the older `15`-style language.
+So the live denominator is conditional, commonly `7` through `11`, not the older `15`-style language.
 
 ### KEEP/DISCARD
 

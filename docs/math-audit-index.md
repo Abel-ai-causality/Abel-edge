@@ -21,6 +21,7 @@ Each document is organized as:
 8. [SMA Crossover](math-audit-08-sma-crossover.md)
 9. [Walk-Forward ML](math-audit-09-walk-forward-ml.md)
 10. [Causal Voting](math-audit-10-causal-voting.md)
+11. [Trade Log Schema And Relative Omega](trade-log-schema-and-relative-omega.md)
 
 ## Scope
 
