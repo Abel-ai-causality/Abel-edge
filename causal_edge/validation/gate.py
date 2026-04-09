@@ -68,7 +68,7 @@ def validate_strategy(
 
     # Auto-detect or load profile
     if profile is None:
-        profile_name = detect_profile(pnl, dates)
+        profile_name = detect_profile(pnl, dates, asset_returns=asset_returns)
     else:
         profile_name = profile
     prof = load_profile(profile_name)

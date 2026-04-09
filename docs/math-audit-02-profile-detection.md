@@ -32,11 +32,10 @@ return "equity_daily"
 
 ## Current Concerns
 
-1. The classification input is strategy `pnl`, not underlying asset returns.
-2. Because `pnl` depends on position sizing, the detector is not leverage-invariant.
-3. The threshold `0.60` is a product rule, not a mathematical identity.
-4. A strategy that changes only its sizing may flip profile and therefore flip the
-   gate set applied to it.
+1. The detector now prefers underlying `asset_return` when available, but still falls
+   back to strategy `pnl` for legacy logs without the richer schema.
+2. The threshold `0.60` is a product rule, not a mathematical identity.
+3. Legacy logs without `asset_return` still inherit the old sizing-sensitive fallback.
 
 ## Audit Questions
 

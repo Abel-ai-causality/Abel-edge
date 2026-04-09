@@ -116,7 +116,11 @@ def test_bootstrap_uses_profile_trial_count() -> None:
 
 def test_detect_profile_equity_for_positive_daily_fixture() -> None:
     df = _load_csv("positive_daily.csv")
-    detected = detect_profile(df["pnl"].to_numpy(), pd.DatetimeIndex(df["date"]))
+    detected = detect_profile(
+        df["pnl"].to_numpy(),
+        pd.DatetimeIndex(df["date"]),
+        asset_returns=df["asset_return"].to_numpy(),
+    )
     assert detected == "equity_daily"
 
 
