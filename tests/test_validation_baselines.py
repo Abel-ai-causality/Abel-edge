@@ -74,6 +74,24 @@ def test_dsr_respects_profile_specific_k() -> None:
     assert 0.0 <= equity["dsr"] <= 1.0
     assert 0.0 <= crypto["dsr"] <= 1.0
     assert 0.0 <= hft["dsr"] <= 1.0
+    assert equity["dsr_trials_used"] == load_profile("equity_daily")["validation"]["dsr_K"]
+    assert crypto["dsr_trials_used"] == load_profile("crypto_daily")["validation"]["dsr_K"]
+    assert hft["dsr_trials_used"] == load_profile("hft")["validation"]["dsr_K"]
+
+
+def test_explicit_dsr_trials_override_profile_default() -> None:
+    df = _load_csv("positive_daily.csv")
+    pnl = df["pnl"].to_numpy()
+    dates = pd.DatetimeIndex(df["date"])
+    positions = df["position"].to_numpy()
+    metrics = compute_all_metrics(
+        pnl,
+        dates,
+        positions,
+        load_profile("equity_daily"),
+        dsr_trials=17,
+    )
+    assert metrics["dsr_trials_used"] == 17
 
 
 def test_bootstrap_uses_profile_trial_count() -> None:
@@ -136,6 +154,13 @@ def test_removed_oos_family_metrics_are_not_in_payload() -> None:
     assert "oos_is" not in metrics
     assert "is_sharpe" not in metrics
     assert "oos_sharpe" not in metrics
+
+
+def test_validate_strategy_reports_explicit_dsr_trials_used() -> None:
+    result = validate_strategy(
+        FIXTURES / "positive_daily.csv", profile="equity_daily", dsr_trials=23
+    )
+    assert result["metrics"]["dsr_trials_used"] == 23
 
 
 def test_fixture_files_are_deterministic() -> None:

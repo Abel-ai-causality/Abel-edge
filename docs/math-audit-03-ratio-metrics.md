@@ -50,11 +50,13 @@ The code computes a DSR-style probability using:
 
 - sample size `T`
 - search-space size `K`
-- daily Sharpe estimate
+- annualized Sharpe estimate using profile `periods_per_year`
 - skew
-- kurtosis-like term from `scipy.stats.kurtosis`
+- raw kurtosis from `scipy.stats.kurtosis(..., fisher=False)`
 
-The active profile supplies `K` through `validation.dsr_K`.
+The runtime now accepts an optional externally declared `dsr_trials` count. When the
+caller does not provide it, the active profile supplies the fallback default through
+`validation.dsr_K`.
 
 ## Current Concerns
 
@@ -62,9 +64,11 @@ The active profile supplies `K` through `validation.dsr_K`.
    mathematically natural limit.
 2. `lo_adjusted` is now explicitly a simplified one-lag penalty, not a full
    long-horizon autocorrelation adjustment.
-3. `_dsr()` uses `scipy.stats.kurtosis()`, which returns excess kurtosis by default;
-   the formula should be checked against the intended paper notation.
-4. The doc claim is stronger than the implementation if the project presents Lo or
+3. `_dsr()` now explicitly uses raw kurtosis to match the intended DSR variance
+   convention. Any future formula changes must preserve that contract or version it.
+4. The validator cannot independently verify whether an externally declared
+   `dsr_trials` count is truthful; the gate depends on operator-supplied research metadata.
+5. The doc claim is stronger than the implementation if the project presents Lo or
    DSR as canonical rather than pragmatic approximations.
 
 ## Audit Questions
@@ -72,5 +76,7 @@ The active profile supplies `K` through `validation.dsr_K`.
 1. Is Lo-adjusted Sharpe intended as a literature-faithful estimator or as a stable
    anti-persistence penalty?
 2. Is DSR trustworthy enough to remain a live gate, or should it be diagnostic only?
-3. Should HFT continue to share `periods_per_year=252`, or should intraday profiles
+3. Should the runtime eventually require explicit `dsr_trials` metadata for promoted
+   strategies instead of allowing the profile fallback?
+4. Should HFT continue to share `periods_per_year=252`, or should intraday profiles
    eventually use a different annualization contract?

@@ -17,6 +17,7 @@ These tests verify:
 import numpy as np
 import pandas as pd
 import pytest
+from scipy import stats as sp_stats
 
 from causal_edge.validation.metrics import (
     _sharpe,
@@ -114,6 +115,30 @@ class TestDSR:
     def test_zero_std(self):
         assert _dsr(np.zeros(100), 100) == 0
 
+    def test_periods_per_year_changes_result(self):
+        pnl = _make_pnl(mean=0.0004, std=0.02, n=252, seed=7)
+        assert _dsr(pnl, 252, K=50, periods_per_year=252) != pytest.approx(
+            _dsr(pnl, 252, K=50, periods_per_year=365), rel=1e-12
+        )
+
+    def test_uses_raw_kurtosis_convention(self):
+        pnl = _make_pnl(mean=0.0004, std=0.02, n=252, seed=7)
+        std = np.std(pnl, ddof=1)
+        sr_d = (np.mean(pnl) / std) * np.sqrt(252)
+        skew = float(sp_stats.skew(pnl))
+        raw_kurt = float(sp_stats.kurtosis(pnl, fisher=False))
+        excess_kurt = float(sp_stats.kurtosis(pnl))
+        gamma = 0.5772
+        z1 = sp_stats.norm.ppf(1 - 1 / 50)
+        z2 = sp_stats.norm.ppf(1 - 1 / (50 * np.e))
+        emax = ((1 - gamma) * z1 + gamma * z2) / np.sqrt(252)
+        raw_var = (1 / 252) * (1 - skew * sr_d + (raw_kurt / 4) * sr_d**2)
+        excess_var = (1 / 252) * (1 - skew * sr_d + (excess_kurt / 4) * sr_d**2)
+        expected = float(sp_stats.norm.cdf((sr_d - emax) / np.sqrt(max(raw_var, 1e-20))))
+        excess_based = float(sp_stats.norm.cdf((sr_d - emax) / np.sqrt(max(excess_var, 1e-20))))
+        assert _dsr(pnl, 252, K=50, periods_per_year=252) == pytest.approx(expected, rel=1e-12)
+        assert expected != pytest.approx(excess_based, rel=1e-12)
+
 
 class TestHillEstimator:
     def test_normal_returns(self):
@@ -153,6 +178,7 @@ class TestComputeAllMetrics:
             "max_dd",
             "calmar",
             "dsr",
+            "dsr_trials_used",
             "pbo",
             "loss_years",
             "neg_roll_frac",

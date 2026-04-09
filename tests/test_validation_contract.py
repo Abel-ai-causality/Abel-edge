@@ -71,8 +71,26 @@ def test_verbose_output_includes_current_metric_section() -> None:
     assert "ic_unsupported_no_position     7/9  FAIL" in result.output
     assert "ic_unsupported_no_position metrics:" in result.output
     assert "sharpe" in result.output
+    assert "dsr_trials_used" in result.output
     assert "ic_hit_rate" not in result.output
     assert "oos_is" not in result.output
+
+
+def test_validate_cli_accepts_dsr_trials_override() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        [
+            "validate",
+            "--csv",
+            str(FIXTURES / "ic_unsupported_no_position.csv"),
+            "--verbose",
+            "--dsr-trials",
+            "17",
+        ],
+    )
+    assert result.exit_code == 1
+    assert "dsr_trials_used      17.0000" in result.output
 
 
 def test_export_output_matches_current_report_contract(tmp_path) -> None:

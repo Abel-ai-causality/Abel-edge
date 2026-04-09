@@ -13,13 +13,14 @@ Three leverage-invariant dimensions:
 ### Contract notes
 - The audited live validation contract uses applicable-gate denominators rather than legacy `20/21` score narratives.
 - Typical denominators are `9` when the IC family is not applicable and `11` when the IC family is applicable.
+- DSR accepts optional externally declared exploration counts via `dsr_trials`; otherwise it falls back to the profile default `validation.dsr_K`.
 - Deferred/removed gates and profile keys are tracked in `causal_edge/validation/deferred_registry.yaml`.
 
 ### Understand why it failed
 
 | Code | Fix | How |
 |------|-----|-----|
-| T6 DSR | Reduce trials | Fewer param combos in grid search. K<50 ideal |
+| T6 DSR | Reduce trials | Fewer param combos in grid search. Declare realistic `dsr_trials`; K<50 ideal |
 | T7 PBO | Simplify model | Fewer features, shallower trees: `max_depth=3` |
 | T13 NegRoll | Add trend filter | `if price < sma_50: position = 0` |
 | T14 LossYrs | Check signal decay | Plot rolling Sharpe — is alpha disappearing? |

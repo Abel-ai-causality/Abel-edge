@@ -28,6 +28,7 @@ def validate_strategy(
     trade_log: str | Path,
     profile: str | None = None,
     positions_col: str = "position",
+    dsr_trials: int | None = None,
 ) -> dict:
     """Run full Abel Proof validation on a strategy's trade log.
 
@@ -36,6 +37,8 @@ def validate_strategy(
         profile: Profile name ('crypto_daily', 'equity_daily', 'hft')
                  or path to YAML. Auto-detected if None.
         positions_col: Column name for positions (default 'position').
+        dsr_trials: Optional externally declared strategy exploration count used
+                    by DSR. Falls back to the profile default when omitted.
 
     Returns dict with:
         verdict: "PASS" or "FAIL"
@@ -69,9 +72,9 @@ def validate_strategy(
 
     # Compute all metrics
     if positions is not None:
-        metrics = compute_all_metrics(pnl, dates, positions, prof)
+        metrics = compute_all_metrics(pnl, dates, positions, prof, dsr_trials=dsr_trials)
     else:
-        metrics = compute_all_metrics(pnl, dates, profile=prof)
+        metrics = compute_all_metrics(pnl, dates, profile=prof, dsr_trials=dsr_trials)
 
     # Run validation gate
     passed, failures = validate(metrics, prof)

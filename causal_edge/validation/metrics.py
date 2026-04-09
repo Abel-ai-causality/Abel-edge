@@ -67,6 +67,7 @@ def compute_all_metrics(
     dates: pd.DatetimeIndex,
     positions: np.ndarray = None,
     profile: dict | None = None,
+    dsr_trials: int | None = None,
 ) -> dict:
     """Compute all strategy metrics from a PnL array.
 
@@ -103,7 +104,8 @@ def compute_all_metrics(
     cf = 1 + 2 * rho1 * (1 - 1 / periods_per_year)
     lo_adjusted = sharpe * np.sqrt(1 / cf) if cf > 0 else sharpe
 
-    dsr = _dsr(pnl, T, K=validation_cfg.get("dsr_K", 300))
+    dsr_trials_used = dsr_trials if dsr_trials is not None else validation_cfg.get("dsr_K", 300)
+    dsr = _dsr(pnl, T, K=dsr_trials_used, periods_per_year=periods_per_year)
     pbo, _ = _cpcv(pnl, n_groups=16)
 
     # Year-by-year stability
@@ -158,6 +160,7 @@ def compute_all_metrics(
         "max_dd": max_dd,
         "calmar": calmar,
         "dsr": dsr,
+        "dsr_trials_used": int(dsr_trials_used),
         "pbo": pbo,
         "loss_years": loss_years,
         "neg_roll_frac": neg_roll_frac,
@@ -279,19 +282,19 @@ def _sortino(pnl):
     return float(np.mean(pnl) / ds * np.sqrt(252)) if ds > 1e-10 else 0.0
 
 
-def _dsr(pnl, T, K=300):
+def _dsr(pnl, T, K=300, periods_per_year=252):
     """Deflated Sharpe Ratio (Bailey & Lopez de Prado 2014)."""
     std = np.std(pnl, ddof=1)
     if std == 0:
         return 0
-    sr_d = np.mean(pnl) / std
+    sr_d = (np.mean(pnl) / std) * np.sqrt(periods_per_year)
     skew = float(sp_stats.skew(pnl))
-    ekurt = float(sp_stats.kurtosis(pnl))
+    raw_kurt = float(sp_stats.kurtosis(pnl, fisher=False))
     gamma = 0.5772
     z1 = sp_stats.norm.ppf(1 - 1 / K)
     z2 = sp_stats.norm.ppf(1 - 1 / (K * np.e))
     emax = ((1 - gamma) * z1 + gamma * z2) / np.sqrt(T)
-    var_sr = (1 / T) * (1 - skew * sr_d + (ekurt / 4) * sr_d**2)
+    var_sr = (1 / T) * (1 - skew * sr_d + (raw_kurt / 4) * sr_d**2)
     return float(sp_stats.norm.cdf((sr_d - emax) / np.sqrt(max(var_sr, 1e-20))))
 
 

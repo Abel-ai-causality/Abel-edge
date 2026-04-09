@@ -44,7 +44,7 @@ It records the audited live contract after remediation of gates, metrics, profil
 | `total_pnl` | keep | Retained as live anti-gaming input |
 | `max_dd` | keep | Retained as live gate and keep/discard input |
 | `calmar` | rebuild | Retained but zero-drawdown sentinel normalized to `0.0` |
-| `dsr` | rebuild | Retained with profile-aware `dsr_K` wiring |
+| `dsr` | rebuild | Retained as a live overfitting gate with operator-supplied `dsr_trials` override and profile-default fallback |
 | `pbo` | keep | Retained live gate metric |
 | `oos_is` | defer | Removed from the live payload because a final PnL path does not establish defensible in-sample/out-of-sample provenance |
 | `loss_years` | keep | Retained live gate metric |
@@ -70,7 +70,7 @@ It records the audited live contract after remediation of gates, metrics, profil
 
 | Gate / failure | Verdict | Rationale |
 |---|---|---|
-| `T6 DSR` | keep | Live documented gate |
+| `T6 DSR` | keep | Live documented overfitting gate; caller may override exploration count via `dsr_trials` |
 | `T7 PBO` | keep | Live documented gate |
 | `T12 OOS/IS` | defer | Removed from live validation because half-split Sharpe ratio lacked a defensible sample-in/sample-out contract |
 | `T13 NegRoll` | keep | Live documented gate |
@@ -88,7 +88,7 @@ It records the audited live contract after remediation of gates, metrics, profil
 
 | Key family | Verdict | Final state |
 |---|---|---|
-| `validation.dsr_K` | keep | Retained and now consumed by live DSR computation |
+| `validation.dsr_K` | keep | Retained as the default exploration-count prior when `dsr_trials` is not explicitly provided |
 | `validation.periods_per_year` | keep | Added as the profile-supplied annualization contract for Sharpe-family metrics |
 | `validation.oos_is_min` | defer | Removed from live YAML after T12 OOS/IS was dropped from the contract |
 | `validation.permutation_*` | defer | Removed from live YAML; tracked in deferred registry |
@@ -130,6 +130,7 @@ The following items were removed from the live contract and are tracked in `caus
 | Score denominator narrative | mathematical correction | Live contract is `9/11` by applicable-gate scope, not legacy `15` / `20` / `21` wording |
 | `OOS/IS` family | removal/defer | `oos_is`, `is_sharpe`, `oos_sharpe`, `T12 OOS/IS`, and `validation.oos_is_min` were removed because a final PnL path could not justify a true IS/OOS claim |
 | `lo_adjusted` simplification | mathematical correction | Fixed-252, 10-lag approximation was replaced with a profile-aware lag-1 serial-correlation penalty |
+| `dsr_trials` override | clarification | DSR now accepts caller-supplied exploration counts and falls back to the profile default only when no explicit declaration is provided |
 | `omega` no-loss sentinel | mathematical correction | `999` → `0.0`; historical reports using sentinel values are not directly comparable |
 | `calmar` zero-drawdown sentinel | mathematical correction | `999` → `0.0`; historical reports using sentinel values are not directly comparable |
 | `skew` constant-series sentinel | clarification | `NaN` → `0.0` for deterministic payload semantics |

@@ -27,6 +27,14 @@ result = validate_strategy("backtest.csv")  # needs: date, pnl columns
 
 Or CLI: `causal-edge validate --csv backtest.csv --verbose`
 
+If you know how many strategy variants you actually explored, declare it explicitly:
+
+```bash
+causal-edge validate --csv backtest.csv --dsr-trials 47
+```
+
+When omitted, DSR falls back to the profile's default exploration-count prior.
+
 For real-price strategies, `causal-edge run` now defaults to Abel price APIs.
 Set `price_data.source: csv` on a strategy to use a local bars CSV instead.
 
@@ -36,7 +44,7 @@ When validation fails, apply fixes, revalidate, repeat until stable.
 
 | Failure | Cause | Fix (copy-paste) |
 |---------|-------|------------------|
-| T6 DSR | Too many trials | Reduce param grid. K<50 ideal |
+| T6 DSR | Too many trials | Reduce param grid. Declare realistic `--dsr-trials`; K<50 ideal |
 | T7 PBO | Overfitting | `max_depth=3, n_estimators=50` |
 | T13 NegRoll | No regime filter | `positions[prices.shift(1) < prices.rolling(50).mean().shift(1)] = 0` |
 | T14 LossYrs | Signal decay | Plot rolling Sharpe — if declining, signal is dying |
