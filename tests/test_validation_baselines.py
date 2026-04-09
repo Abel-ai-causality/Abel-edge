@@ -49,7 +49,18 @@ def test_clipped_fixture_changes_shape_contract() -> None:
 
 def test_autocorrelated_fixture_has_elevated_sharpe_lo_ratio() -> None:
     metrics = _compute("autocorrelated.csv")
-    assert metrics["sharpe_lo_ratio"] == pytest.approx(1.0, rel=1e-9)
+    assert metrics["sharpe_lo_ratio"] > 1.0
+
+
+def test_sharpe_annualization_respects_profile_periods_per_year() -> None:
+    df = _load_csv("positive_daily.csv")
+    pnl = df["pnl"].to_numpy()
+    dates = pd.DatetimeIndex(df["date"])
+    positions = df["position"].to_numpy()
+    equity = compute_all_metrics(pnl, dates, positions, load_profile("equity_daily"))
+    crypto = compute_all_metrics(pnl, dates, positions, load_profile("crypto_daily"))
+    expected = (365 / 252) ** 0.5
+    assert crypto["sharpe"] / equity["sharpe"] == pytest.approx(expected, rel=1e-9)
 
 
 def test_dsr_respects_profile_specific_k() -> None:

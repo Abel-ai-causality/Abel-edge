@@ -22,6 +22,7 @@ anti_gaming:
   ic_stability_min: 0.40
 
 validation:
+  periods_per_year: 252
   dsr_min: 0.90
   dsr_K: 1000                    # HFT typically explores many configs
   pbo_max: 0.10

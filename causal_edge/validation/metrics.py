@@ -88,20 +88,21 @@ def compute_all_metrics(
     cum = np.cumsum(pnl)
     dd = cum - np.maximum.accumulate(cum)
     std = np.std(pnl, ddof=1)
+    validation_cfg = (profile or {}).get("validation", {})
+    periods_per_year = validation_cfg.get("periods_per_year", 252)
 
-    sharpe = float(np.mean(pnl) / std * np.sqrt(252)) if std > 0 else 0
+    sharpe = float(np.mean(pnl) / std * np.sqrt(periods_per_year)) if std > 0 else 0
     sortino = _sortino(pnl)
     max_dd = float(np.min(dd))
     calmar = float(cum[-1] / abs(max_dd)) if max_dd < 0 else 0.0
     total_pnl = float(cum[-1])
 
-    # Lo-adjusted Sharpe (serial correlation correction)
-    rho = [pd.Series(pnl).autocorr(lag=k) for k in range(1, 11)]
-    rho = [r if not np.isnan(r) else 0 for r in rho]
-    cf = 1 + 2 * sum(rho[k] * (1 - (k + 1) / 252) for k in range(10))
+    # Simplified serial-correlation penalty: lag-1 autocorrelation only.
+    rho1 = pd.Series(pnl).autocorr(lag=1)
+    rho1 = 0.0 if np.isnan(rho1) else float(rho1)
+    cf = 1 + 2 * rho1 * (1 - 1 / periods_per_year)
     lo_adjusted = sharpe * np.sqrt(1 / cf) if cf > 0 else sharpe
 
-    validation_cfg = (profile or {}).get("validation", {})
     dsr = _dsr(pnl, T, K=validation_cfg.get("dsr_K", 300))
     pbo, _ = _cpcv(pnl, n_groups=16)
 

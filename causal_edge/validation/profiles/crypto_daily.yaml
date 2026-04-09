@@ -25,6 +25,7 @@ anti_gaming:
   ic_stability_min: 0.50
 
 validation:
+  periods_per_year: 365
   dsr_min: 0.90
   dsr_K: 300
   pbo_max: 0.10

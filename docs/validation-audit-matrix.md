@@ -39,7 +39,7 @@ It records the audited live contract after remediation of gates, metrics, profil
 | Metric | Verdict | Rationale |
 |---|---|---|
 | `sharpe` | keep | Core retained ratio metric |
-| `lo_adjusted` | keep | Core retained ratio metric for serial-correlation-aware profiles |
+| `lo_adjusted` | rebuild | Retained ratio metric, simplified to a profile-aware lag-1 serial-correlation penalty |
 | `sortino` | keep | Retained as diagnostic payload metric |
 | `total_pnl` | keep | Retained as live anti-gaming input |
 | `max_dd` | keep | Retained as live gate and keep/discard input |
@@ -89,6 +89,7 @@ It records the audited live contract after remediation of gates, metrics, profil
 | Key family | Verdict | Final state |
 |---|---|---|
 | `validation.dsr_K` | keep | Retained and now consumed by live DSR computation |
+| `validation.periods_per_year` | keep | Added as the profile-supplied annualization contract for Sharpe-family metrics |
 | `validation.oos_is_min` | defer | Removed from live YAML after T12 OOS/IS was dropped from the contract |
 | `validation.permutation_*` | defer | Removed from live YAML; tracked in deferred registry |
 | `validation.look_ahead_*` | defer | Removed from live YAML; tracked in deferred registry |
@@ -128,6 +129,7 @@ The following items were removed from the live contract and are tracked in `caus
 |---|---|---|
 | Score denominator narrative | mathematical correction | Live contract is `9/11` by applicable-gate scope, not legacy `15` / `20` / `21` wording |
 | `OOS/IS` family | removal/defer | `oos_is`, `is_sharpe`, `oos_sharpe`, `T12 OOS/IS`, and `validation.oos_is_min` were removed because a final PnL path could not justify a true IS/OOS claim |
+| `lo_adjusted` simplification | mathematical correction | Fixed-252, 10-lag approximation was replaced with a profile-aware lag-1 serial-correlation penalty |
 | `omega` no-loss sentinel | mathematical correction | `999` → `0.0`; historical reports using sentinel values are not directly comparable |
 | `calmar` zero-drawdown sentinel | mathematical correction | `999` → `0.0`; historical reports using sentinel values are not directly comparable |
 | `skew` constant-series sentinel | clarification | `NaN` → `0.0` for deterministic payload semantics |
