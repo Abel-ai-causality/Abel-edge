@@ -180,7 +180,9 @@ def print_validation_report(results: dict) -> None:
 
 def _count_total(metrics: dict, profile: dict) -> int:
     """Count total applicable validation checks."""
-    count = 8  # DSR, DrawdownTime, MaxDDDuration, LossYrs, Lo, Omega, MaxDD, PnL floor
+    count = 7  # DSR, DrawdownTime, MaxDDDuration, Lo, Omega, MaxDD, PnL floor
+    if metrics.get("loss_years_applicable", False):
+        count += 1  # LossYrs
     count += 1  # Sharpe/Lo ratio
     if metrics.get("ic_applicable", False):
         count += 2  # IC min + IC stability

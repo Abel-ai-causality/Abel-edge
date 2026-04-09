@@ -8,7 +8,8 @@ Three leverage-invariant, orthogonal dimensions:
 No known transformation improves all three except genuine signal improvement.
 
 The audited live validation contract uses applicable-gate denominators
-(commonly 9 or 11) rather than the older fixed 20/21-style narrative.
+(commonly 8 or 10, rising to 9 or 11 when full-year loss accounting is applicable)
+rather than the older fixed 20/21-style narrative.
 """
 
 from causal_edge.validation.metrics import compute_all_metrics, validate

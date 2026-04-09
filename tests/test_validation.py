@@ -180,6 +180,8 @@ class TestComputeAllMetrics:
             "dsr",
             "dsr_trials_used",
             "loss_years",
+            "loss_years_applicable",
+            "full_years_count",
             "drawdown_time_frac",
             "max_drawdown_duration_bars",
             "omega",
@@ -194,6 +196,7 @@ class TestComputeAllMetrics:
             "active_days",
             "total_days",
             "yearly_sharpes",
+            "yearly_pnl",
         ]
         for key in required_keys:
             assert key in m, f"Missing key: {key}"

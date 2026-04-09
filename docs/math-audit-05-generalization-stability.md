@@ -39,8 +39,10 @@ abs(oos_is) < threshold
 
 ### Loss years
 
-For each calendar year, the code computes yearly Sharpe and counts how many years
-have negative Sharpe.
+The live contract now counts only full calendar years with negative total PnL.
+
+Partial years still expose diagnostics (`yearly_sharpes`, `yearly_pnl`) but do not
+activate the `LossYrs` gate.
 
 ### Drawdown-time stability
 
@@ -71,16 +73,20 @@ bootstrapped Sharpe is non-positive.
    out-of-sample Sharpe to pass.
 3. The removed PBO family had an input-contract mismatch: validator runtime receives a
    final trade log, not the candidate-by-fold research artifact a true PBO requires.
-4. HFT currently leaves `max_drawdown_duration_bars_max` unknown until bar cadence is
+4. `LossYrs` is now conditional on full-year coverage, so short backtests no longer
+   claim year-level stability evidence they do not actually contain.
+5. HFT currently leaves `max_drawdown_duration_bars_max` unknown until bar cadence is
    explicitly contracted in the profile.
-5. `bootstrap_p` is still computed but no longer drives a live gate.
+6. `bootstrap_p` is still computed but no longer drives a live gate.
 
 ## Audit Questions
 
 1. Should the OOS/IS family stay deferred unless the runtime receives explicit train/test provenance?
 2. If PBO ever returns, should it require an explicit candidate-by-fold CPCV artifact
    from the external explorer instead of inferring anything from a single PnL path?
-3. Should HFT remain partially unspecified here until its bar cadence is made explicit
+3. Should `LossYrs` eventually require more than one full year before it becomes
+   applicable, or is one full year enough for this contract?
+4. Should HFT remain partially unspecified here until its bar cadence is made explicit
    in profile contracts?
-4. If OOS-style checks ever return, should they require explicit fold metadata rather
+5. If OOS-style checks ever return, should they require explicit fold metadata rather
    than inferring IS/OOS from a final contiguous PnL path?

@@ -127,6 +127,19 @@ def test_ic_unsupported_fixture_keeps_ic_family_zero_without_position() -> None:
     assert metrics["ic_monthly_mean"] == 0.0
 
 
+def test_loss_years_requires_full_calendar_year() -> None:
+    metrics = _compute("positive_daily.csv")
+    assert metrics["loss_years_applicable"] is False
+    assert metrics["full_years_count"] == 0
+    assert metrics["loss_years"] == 0
+
+
+def test_yearly_pnl_is_exposed_for_audit() -> None:
+    metrics = _compute("positive_daily.csv")
+    assert "yearly_pnl" in metrics
+    assert 2020 in metrics["yearly_pnl"]
+
+
 def test_insufficient_rows_csv_fails_validation_contract() -> None:
     result = validate_strategy(FIXTURES / "insufficient_rows.csv")
     assert result["verdict"] == "FAIL"
@@ -148,7 +161,7 @@ def test_defer_candidate_metrics_are_not_gate_failures() -> None:
 def test_public_claim_denominator_drift_is_visible() -> None:
     result = validate_strategy(FIXTURES / "positive_daily.csv", profile="equity_daily")
     denominator = int(result["score"].split("/")[1])
-    assert denominator == 11
+    assert denominator == 10
 
 
 def test_removed_oos_family_metrics_are_not_in_payload() -> None:

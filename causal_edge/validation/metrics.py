@@ -106,14 +106,24 @@ def compute_all_metrics(
     dsr_trials_used = dsr_trials if dsr_trials is not None else validation_cfg.get("dsr_K", 300)
     dsr = _dsr(pnl, T, K=dsr_trials_used, periods_per_year=periods_per_year)
 
-    # Year-by-year stability
+    # Year-by-year stability: count only full calendar years with negative total PnL.
     loss_years = 0
     yearly_sharpes = {}
-    for yr in sorted(dates.year.unique()):
-        ysh = _sharpe(pnl[dates.year == yr])
-        yearly_sharpes[yr] = ysh
-        if ysh < 0:
-            loss_years += 1
+    yearly_pnl = {}
+    full_years_count = 0
+    years = sorted(dates.year.unique())
+    for yr in years:
+        mask = dates.year == yr
+        year_dates = dates[mask]
+        year_pnl = pnl[mask]
+        yearly_sharpes[yr] = _sharpe(year_pnl)
+        total_year_pnl = float(np.sum(year_pnl))
+        yearly_pnl[yr] = total_year_pnl
+        if _is_full_calendar_year(year_dates):
+            full_years_count += 1
+            if total_year_pnl < -1e-12:
+                loss_years += 1
+    loss_years_applicable = full_years_count > 0
 
     # Drawdown-time stability: fraction of bars underwater and longest underwater spell.
     underwater = cum < (np.maximum.accumulate(cum) - 1e-12)
@@ -161,6 +171,8 @@ def compute_all_metrics(
         "dsr": dsr,
         "dsr_trials_used": int(dsr_trials_used),
         "loss_years": loss_years,
+        "loss_years_applicable": loss_years_applicable,
+        "full_years_count": full_years_count,
         "drawdown_time_frac": drawdown_time_frac,
         "max_drawdown_duration_bars": max_drawdown_duration_bars,
         "omega": omega,
@@ -175,6 +187,7 @@ def compute_all_metrics(
         "active_days": active_days,
         "total_days": T,
         "yearly_sharpes": yearly_sharpes,
+        "yearly_pnl": yearly_pnl,
     }
 
 
@@ -200,7 +213,9 @@ def validate(metrics: dict, profile: dict) -> tuple[bool, list[str]]:
         failures.append(
             f"T13 MaxDDDuration {metrics['max_drawdown_duration_bars']} > {max_dd_bars_limit} bars"
         )
-    if metrics["loss_years"] > v.get("max_loss_years", 2):
+    if metrics.get("loss_years_applicable", False) and metrics["loss_years"] > v.get(
+        "max_loss_years", 2
+    ):
         failures.append(f"T14 LossYrs {metrics['loss_years']} > {v['max_loss_years']}")
     if metrics["lo_adjusted"] < v.get("lo_adjusted_min", 1.0):
         failures.append(f"T15 Lo {metrics['lo_adjusted']:.2f} < {v['lo_adjusted_min']}")
@@ -295,6 +310,15 @@ def _max_true_run(mask) -> int:
         else:
             run = 0
     return int(max_run)
+
+
+def _is_full_calendar_year(year_dates: pd.DatetimeIndex) -> bool:
+    if len(year_dates) == 0:
+        return False
+    year = int(year_dates[0].year)
+    start = pd.Timestamp(year=year, month=1, day=1)
+    end = pd.Timestamp(year=year, month=12, day=31)
+    return year_dates.min() <= start and year_dates.max() >= end
 
 
 def _dsr(pnl, T, K=300, periods_per_year=252):
