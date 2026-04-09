@@ -6,7 +6,7 @@ pandas, numpy, scipy.
 
 Metric triangle (leverage-invariant, orthogonal):
   - Ratio: Lo-adjusted Sharpe (crypto) or raw Sharpe (equity)
-  - Rank:  IC (Spearman rank correlation of position vs return)
+  - Rank:  Position-Return IC (Spearman rank correlation of position vs asset return)
   - Shape: Omega (sum of gains / sum of |losses|)
 
 Anti-gaming:
@@ -20,6 +20,8 @@ import os
 import numpy as np
 import pandas as pd
 from scipy import stats as sp_stats
+
+from causal_edge.validation.position_ic import compute_position_ic
 
 PROFILES_DIR = os.path.join(os.path.dirname(__file__), "profiles")
 
@@ -67,13 +69,15 @@ def compute_all_metrics(
     positions: np.ndarray = None,
     profile: dict | None = None,
     dsr_trials: int | None = None,
+    asset_returns: np.ndarray = None,
 ) -> dict:
     """Compute all strategy metrics from a PnL array.
 
     Args:
         pnl: daily simple-return strategy PnL array
         dates: DatetimeIndex aligned with pnl
-        positions: optional position array for IC computation
+        positions: optional position array for position-return IC computation
+        asset_returns: optional underlying asset simple-return array aligned with pnl
 
     Returns dict with all metrics needed for validation gate.
     """
@@ -148,12 +152,25 @@ def compute_all_metrics(
     sharpe_lo_ratio = sharpe / lo_adjusted if lo_adjusted > 0 else 999
     bootstrap_p = _bootstrap_sharpe(pnl, n_boot=validation_cfg.get("permutation_trials", 1000))
 
-    # IC (Information Coefficient)
-    ic, ic_hit_rate, ic_stability, ic_monthly_mean = 0.0, 0.0, 0.0, 0.0
-    ic_applicable = False
-    if positions is not None and len(positions) == T:
-        ic, ic_hit_rate, ic_stability, ic_monthly_mean = _compute_ic(pnl, positions, dates)
-        ic_applicable = True
+    # Position-Return IC (time-series Spearman rank correlation).
+    position_ic, position_hit_rate = 0.0, 0.0
+    position_ic_stability, position_ic_monthly_mean = 0.0, 0.0
+    position_ic_applicable = False
+    position_ic_stability_applicable = False
+    if (
+        positions is not None
+        and asset_returns is not None
+        and len(positions) == T
+        and len(asset_returns) == T
+    ):
+        (
+            position_ic,
+            position_hit_rate,
+            position_ic_stability,
+            position_ic_monthly_mean,
+            position_ic_applicable,
+            position_ic_stability_applicable,
+        ) = compute_position_ic(asset_returns, positions, dates)
 
     active_days = (
         int(np.sum(np.abs(positions) > 0.01))
@@ -180,11 +197,12 @@ def compute_all_metrics(
         "skew": skew,
         "sharpe_lo_ratio": sharpe_lo_ratio,
         "bootstrap_p": bootstrap_p,
-        "ic": ic,
-        "ic_hit_rate": ic_hit_rate,
-        "ic_stability": ic_stability,
-        "ic_monthly_mean": ic_monthly_mean,
-        "ic_applicable": ic_applicable,
+        "position_ic": position_ic,
+        "position_hit_rate": position_hit_rate,
+        "position_ic_stability": position_ic_stability,
+        "position_ic_monthly_mean": position_ic_monthly_mean,
+        "position_ic_applicable": position_ic_applicable,
+        "position_ic_stability_applicable": position_ic_stability_applicable,
         "active_days": active_days,
         "total_days": T,
         "yearly_sharpes": yearly_sharpes,
@@ -238,12 +256,16 @@ def validate(metrics: dict, profile: dict) -> tuple[bool, list[str]]:
         failures.append(
             f"Sharpe/Lo {metrics['sharpe_lo_ratio']:.1f} > {ag['sharpe_lo_ratio_max']}"
         )
-    if metrics.get("ic_applicable", False) and metrics["ic"] < ag.get("ic_min", 0.02):
-        failures.append(f"IC {metrics['ic']:.3f} < {ag['ic_min']}")
-    if metrics.get("ic_applicable", False) and metrics["ic_stability"] < ag.get(
-        "ic_stability_min", 0.50
+    if metrics.get("position_ic_applicable", False) and metrics["position_ic"] < ag.get(
+        "position_ic_min", 0.02
     ):
-        failures.append(f"IC stab {metrics['ic_stability']:.0%} < {ag['ic_stability_min']:.0%}")
+        failures.append(f"PositionIC {metrics['position_ic']:.3f} < {ag['position_ic_min']}")
+    if metrics.get("position_ic_stability_applicable", False) and metrics[
+        "position_ic_stability"
+    ] < ag.get("position_ic_stability_min", 0.55):
+        failures.append(
+            f"PositionIC stab {metrics['position_ic_stability']:.0%} < {ag['position_ic_stability_min']:.0%}"
+        )
     return len(failures) == 0, failures
 
 
@@ -252,7 +274,7 @@ def decide_keep_discard(current: dict, baseline: dict, profile: dict) -> str:
 
     Three leverage-invariant, orthogonal dimensions:
       Ratio (Lo-adj or Sharpe) — optimized, must improve
-      Rank  (IC)               — guardrail, must not degrade
+      Rank  (Position IC)      — guardrail, must not degrade
       Shape (Omega)            — guardrail, catches clipping
 
     MaxDD is an absolute gate (not relative — scales with leverage).
@@ -267,9 +289,13 @@ def decide_keep_discard(current: dict, baseline: dict, profile: dict) -> str:
         return "DISCARD"
 
     for guard in mt.get("guardrails", []):
-        key = {"raw_sharpe": "sharpe", "ic": "ic", "omega": "omega", "total_pnl": "total_pnl"}.get(
-            guard["metric"], guard["metric"]
-        )
+        key = {
+            "raw_sharpe": "sharpe",
+            "ic": "position_ic",
+            "position_ic": "position_ic",
+            "omega": "omega",
+            "total_pnl": "total_pnl",
+        }.get(guard["metric"], guard["metric"])
         tol = guard.get("tolerance", 0)
         if key == "total_pnl" and baseline.get(key, 0) > 0:
             if current.get(key, 0) < baseline[key] * (1 - tol):
@@ -362,34 +388,3 @@ def _bootstrap_sharpe(pnl, n_boot=1000):
     T = len(pnl)
     boot = [_sharpe(rng.choice(pnl, size=T, replace=True)) for _ in range(n_boot)]
     return float(np.mean(np.array(boot) <= 0))
-
-
-def _compute_ic(pnl, positions, dates):
-    """Compute IC (Spearman) and monthly stability."""
-    active_mask = np.abs(positions) > 0.01
-    if active_mask.sum() < 30:
-        return 0.0, 0.0, 0.0, 0.0
-
-    ap, al = positions[active_mask], pnl[active_mask]
-    if np.std(ap) < 1e-10 or np.std(al) < 1e-10:
-        return 0.0, float(np.mean(np.sign(ap) == np.sign(al))), 0.0, 0.0
-
-    ic = float(sp_stats.spearmanr(ap, al)[0])
-    if np.isnan(ic):
-        ic = 0.0
-    hit_rate = float(np.mean(np.sign(ap) == np.sign(al)))
-
-    ad = dates[active_mask]
-    monthly_ics = []
-    for ym in sorted(set(zip(ad.year, ad.month))):
-        m = (ad.year == ym[0]) & (ad.month == ym[1])
-        if m.sum() > 5:
-            mp, ml = ap[m], al[m]
-            if np.std(mp) > 1e-10 and np.std(ml) > 1e-10:
-                mic = float(sp_stats.spearmanr(mp, ml)[0])
-                if not np.isnan(mic):
-                    monthly_ics.append(mic)
-
-    stability = float(np.mean(np.array(monthly_ics) > 0)) if monthly_ics else 0
-    monthly_mean = float(np.mean(monthly_ics)) if monthly_ics else 0
-    return ic, hit_rate, stability, monthly_mean

@@ -27,8 +27,8 @@ The live gate applies these checks:
 - `T15 MaxDD`
 - `PnL floor`
 - `Sharpe/Lo`
-- conditional `IC`
-- conditional `IC stab`
+- conditional `PositionIC`
+- conditional `PositionIC stab`
 
 ### Score denominator
 
@@ -37,7 +37,8 @@ The live gate applies these checks:
 - base count `7`
 - plus `1` if `omega_applicable` is true
 - plus `1` if `loss_years_applicable` is true
-- plus `2` if `ic_applicable` is true
+- plus `1` if `position_ic_applicable` is true
+- plus `1` if `position_ic_stability_applicable` is true
 
 So the live denominator is conditional, commonly `7` through `11`, not the older `15`-style language.
 

@@ -24,7 +24,7 @@ def test_csv_without_position_has_current_conditional_denominator() -> None:
     result = validate_strategy(FIXTURES / "ic_unsupported_no_position.csv", profile="equity_daily")
     assert result["verdict"] == "FAIL"
     assert result["score"] == "6/7"
-    assert result["metrics"]["ic_applicable"] is False
+    assert result["metrics"]["position_ic_applicable"] is False
     assert result["metrics"]["loss_years_applicable"] is False
     assert result["metrics"]["omega_applicable"] is False
     assert result["triangle"]["rank"] == 0.0
@@ -33,16 +33,18 @@ def test_csv_without_position_has_current_conditional_denominator() -> None:
 
 def test_csv_with_position_marks_ic_family_applicable() -> None:
     result = validate_strategy(FIXTURES / "ic_supported.csv", profile="equity_daily")
-    assert result["metrics"]["ic_applicable"] is True
-    assert result["score"].endswith("/10")
+    assert result["metrics"]["position_ic_applicable"] is True
+    assert result["metrics"]["position_ic_stability_applicable"] is False
+    assert result["score"].endswith("/9")
 
 
 def test_position_aware_csv_without_ic_failures_uses_15_test_contract() -> None:
     result = validate_strategy(FIXTURES / "positive_daily.csv", profile="equity_daily")
-    assert result["metrics"]["ic_applicable"] is True
+    assert result["metrics"]["position_ic_applicable"] is True
+    assert result["metrics"]["position_ic_stability_applicable"] is False
     assert result["metrics"]["loss_years_applicable"] is False
     assert result["metrics"]["omega_applicable"] is False
-    assert result["score"] == "8/9"
+    assert result["score"] == "7/8"
 
 
 def test_csv_without_position_omits_ic_gate_labels_from_failures() -> None:
@@ -80,7 +82,7 @@ def test_verbose_output_includes_current_metric_section() -> None:
     assert "ic_unsupported_no_position metrics:" in result.output
     assert "sharpe" in result.output
     assert "dsr_trials_used" in result.output
-    assert "ic_hit_rate" not in result.output
+    assert "position_hit_rate" not in result.output
     assert "pbo" not in result.output
     assert "oos_is" not in result.output
 

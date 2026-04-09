@@ -171,10 +171,10 @@ def validate(strategy, verbose, csv_path, dsr_trials, export_path, config):
                     "dsr",
                     "dsr_trials_used",
                     "omega",
-                    "ic",
-                    "ic_hit_rate",
+                    "position_ic",
+                    "position_hit_rate",
                 ):
-                    if key.startswith("ic") and not m.get("ic_applicable", False):
+                    if key.startswith("position_") and not m.get("position_ic_applicable", False):
                         continue
                     if key in m:
                         print(f"    {key:20s} {m[key]:.4f}")

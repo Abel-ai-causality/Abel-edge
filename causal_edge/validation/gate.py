@@ -62,6 +62,9 @@ def validate_strategy(
     pnl = df["pnl"].values.astype(float)
     dates = pd.DatetimeIndex(df["date"])
     positions = df[positions_col].values.astype(float) if positions_col in df.columns else None
+    asset_returns = (
+        df["asset_return"].values.astype(float) if "asset_return" in df.columns else None
+    )
 
     # Auto-detect or load profile
     if profile is None:
@@ -72,9 +75,22 @@ def validate_strategy(
 
     # Compute all metrics
     if positions is not None:
-        metrics = compute_all_metrics(pnl, dates, positions, prof, dsr_trials=dsr_trials)
+        metrics = compute_all_metrics(
+            pnl,
+            dates,
+            positions,
+            prof,
+            dsr_trials=dsr_trials,
+            asset_returns=asset_returns,
+        )
     else:
-        metrics = compute_all_metrics(pnl, dates, profile=prof, dsr_trials=dsr_trials)
+        metrics = compute_all_metrics(
+            pnl,
+            dates,
+            profile=prof,
+            dsr_trials=dsr_trials,
+            asset_returns=asset_returns,
+        )
 
     # Run validation gate
     passed, failures = validate(metrics, prof)
@@ -86,7 +102,7 @@ def validate_strategy(
     )
     triangle = {
         "ratio": metrics.get(opt_key, 0),
-        "rank": metrics.get("ic", 0),
+        "rank": metrics.get("position_ic", 0),
         "shape": metrics.get("omega", 0),
     }
 
@@ -186,6 +202,8 @@ def _count_total(metrics: dict, profile: dict) -> int:
     if metrics.get("omega_applicable", False):
         count += 1  # Omega
     count += 1  # Sharpe/Lo ratio
-    if metrics.get("ic_applicable", False):
-        count += 2  # IC min + IC stability
+    if metrics.get("position_ic_applicable", False):
+        count += 1  # PositionIC min
+    if metrics.get("position_ic_stability_applicable", False):
+        count += 1  # PositionIC stability
     return count

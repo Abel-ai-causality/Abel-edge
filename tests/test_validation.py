@@ -169,7 +169,7 @@ class TestBootstrap:
 class TestComputeAllMetrics:
     def test_returns_all_keys(self, good_strategy):
         pnl, dates, pos = good_strategy
-        m = compute_all_metrics(pnl, dates, pos)
+        m = compute_all_metrics(pnl, dates, pos, asset_returns=pnl)
         required_keys = [
             "sharpe",
             "lo_adjusted",
@@ -189,11 +189,12 @@ class TestComputeAllMetrics:
             "skew",
             "sharpe_lo_ratio",
             "bootstrap_p",
-            "ic",
-            "ic_hit_rate",
-            "ic_stability",
-            "ic_monthly_mean",
-            "ic_applicable",
+            "position_ic",
+            "position_hit_rate",
+            "position_ic_stability",
+            "position_ic_monthly_mean",
+            "position_ic_applicable",
+            "position_ic_stability_applicable",
             "active_days",
             "total_days",
             "yearly_sharpes",
@@ -204,23 +205,23 @@ class TestComputeAllMetrics:
 
     def test_sharpe_positive_for_good_strategy(self, good_strategy):
         pnl, dates, pos = good_strategy
-        m = compute_all_metrics(pnl, dates, pos)
+        m = compute_all_metrics(pnl, dates, pos, asset_returns=pnl)
         assert m["sharpe"] > 1.0
 
     def test_omega_above_one_for_positive(self, good_strategy):
         pnl, dates, pos = good_strategy
-        m = compute_all_metrics(pnl, dates, pos)
+        m = compute_all_metrics(pnl, dates, pos, asset_returns=pnl)
         assert m["omega"] > 1.0
 
-    def test_ic_computed_with_positions(self):
-        """IC should be nonzero when positions genuinely predict returns."""
+    def test_position_ic_computed_with_positions(self):
+        """Position-return IC should be nonzero when positions genuinely predict returns."""
         rng = np.random.RandomState(42)
-        pnl = rng.normal(0.001, 0.02, 500)
+        asset_returns = rng.normal(0.001, 0.02, 500)
         dates = _make_dates(n=500)
-        # Positions proportional to return magnitude → strong Spearman correlation
-        pos = pnl * 10 + 0.5  # varied sizes, centered around 0.5
-        m = compute_all_metrics(pnl, dates, pos)
-        assert m["ic"] > 0.3  # strong positive IC
+        pos = asset_returns * 10 + 0.5
+        pnl = pos * asset_returns
+        m = compute_all_metrics(pnl, dates, pos, asset_returns=asset_returns)
+        assert m["position_ic"] > 0.3
 
     def test_too_short_raises(self):
         with pytest.raises(ValueError, match="at least 30"):

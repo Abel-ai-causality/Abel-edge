@@ -19,6 +19,7 @@ def read_trade_log(path: str | Path) -> pd.DataFrame:
 
 def write_trade_log(
     dates: pd.DatetimeIndex,
+    asset_returns: np.ndarray,
     pnl: np.ndarray,
     positions: np.ndarray,
     path: str | Path,
@@ -28,6 +29,7 @@ def write_trade_log(
 
     Args:
         dates: Trading dates
+        asset_returns: Daily simple returns of the underlying asset
         pnl: Daily PnL (position * returns)
         positions: Daily position sizes
         path: Output CSV path
@@ -39,6 +41,7 @@ def write_trade_log(
     df = pd.DataFrame(
         {
             "date": dates,
+            "asset_return": asset_returns,
             "pnl": pnl,
             "position": positions,
             "cum_return": np.cumprod(1.0 + pnl) - 1.0,

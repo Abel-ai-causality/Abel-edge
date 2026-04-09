@@ -2,7 +2,7 @@
 
 Three leverage-invariant dimensions:
 - **Ratio** (Lo-adjusted Sharpe) — optimized
-- **Rank** (IC) — guardrail, catches concentration
+- **Rank** (Position-Return IC) — guardrail on whether larger positions align with better underlying returns
 - **Shape** (Omega) — guardrail, catches clipping
 
 ## I want to...
@@ -12,7 +12,7 @@ Three leverage-invariant dimensions:
 
 ### Contract notes
 - The audited live validation contract uses applicable-gate denominators rather than legacy `20/21` score narratives.
-- Typical denominators start at `7`, add `+2` for IC, `+1` for `Omega` applicability, and `+1` for full-year `LossYrs` applicability.
+- Typical denominators start at `7`, add `+2` for Position-Return IC, `+1` for `Omega` applicability, and `+1` for full-year `LossYrs` applicability.
 - DSR accepts optional externally declared exploration counts via `dsr_trials`; otherwise it falls back to the profile default `validation.dsr_K`.
 - Deferred/removed gates and profile keys are tracked in `causal_edge/validation/deferred_registry.yaml`.
 

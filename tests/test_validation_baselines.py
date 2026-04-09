@@ -20,14 +20,21 @@ def _load_csv(name: str) -> pd.DataFrame:
 def _compute(name: str) -> dict:
     df = _load_csv(name)
     profile = load_profile("equity_daily")
+    asset_returns = df["asset_return"].to_numpy() if "asset_return" in df.columns else None
     if "position" in df.columns:
         return compute_all_metrics(
             df["pnl"].to_numpy(),
             pd.DatetimeIndex(df["date"]),
             df["position"].to_numpy(),
             profile,
+            asset_returns=asset_returns,
         )
-    return compute_all_metrics(df["pnl"].to_numpy(), pd.DatetimeIndex(df["date"]), profile=profile)
+    return compute_all_metrics(
+        df["pnl"].to_numpy(),
+        pd.DatetimeIndex(df["date"]),
+        asset_returns=asset_returns,
+        profile=profile,
+    )
 
 
 def test_positive_daily_baselines() -> None:
@@ -113,20 +120,21 @@ def test_detect_profile_equity_for_positive_daily_fixture() -> None:
     assert detected == "equity_daily"
 
 
-def test_ic_supported_fixture_computes_positive_ic() -> None:
+def test_position_ic_supported_fixture_computes_positive_ic() -> None:
     metrics = _compute("ic_supported.csv")
-    assert metrics["ic_applicable"] is True
-    assert metrics["ic"] > 0.95
-    assert metrics["ic_stability"] == pytest.approx(1.0, rel=1e-9)
+    assert metrics["position_ic_applicable"] is True
+    assert metrics["position_ic"] > 0.95
+    assert metrics["position_hit_rate"] == pytest.approx(1.0, rel=1e-9)
+    assert metrics["position_ic_stability_applicable"] is False
 
 
-def test_ic_unsupported_fixture_keeps_ic_family_zero_without_position() -> None:
+def test_position_ic_unsupported_fixture_keeps_family_zero_without_position() -> None:
     metrics = _compute("ic_unsupported_no_position.csv")
-    assert metrics["ic_applicable"] is False
-    assert metrics["ic"] == 0.0
-    assert metrics["ic_hit_rate"] == 0.0
-    assert metrics["ic_stability"] == 0.0
-    assert metrics["ic_monthly_mean"] == 0.0
+    assert metrics["position_ic_applicable"] is False
+    assert metrics["position_ic"] == 0.0
+    assert metrics["position_hit_rate"] == 0.0
+    assert metrics["position_ic_stability"] == 0.0
+    assert metrics["position_ic_monthly_mean"] == 0.0
 
 
 def test_loss_years_requires_full_calendar_year() -> None:
@@ -163,7 +171,7 @@ def test_defer_candidate_metrics_are_not_gate_failures() -> None:
 def test_public_claim_denominator_drift_is_visible() -> None:
     result = validate_strategy(FIXTURES / "positive_daily.csv", profile="equity_daily")
     denominator = int(result["score"].split("/")[1])
-    assert denominator == 9
+    assert denominator == 8
 
 
 def test_removed_oos_family_metrics_are_not_in_payload() -> None:

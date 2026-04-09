@@ -10,7 +10,7 @@ causal-edge validate --csv my_backtest.csv
 
 That's it. You'll get an audited validation report card in 2 seconds. No engine, no YAML, no setup.
 
-Add a `position` column for IC (Information Coefficient) analysis.
+Add `position` and `asset_return` columns for Position-Return IC analysis.
 
 ## Build a Strategy Engine
 

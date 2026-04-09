@@ -14,15 +14,15 @@ description: >
 metric_triangle:
   optimize: sharpe
   guardrails:
-    - {metric: ic, tolerance: 0.005}
+    - {metric: position_ic, tolerance: 0.005}
     - {metric: omega, tolerance: 0.10}
 
 anti_gaming:
   pnl_floor: 0.30
   max_dd_gate: -0.15                           # absolute gate (not relative comparison)
   sharpe_lo_ratio_max: 3.0
-  ic_min: 0.02
-  ic_stability_min: 0.50
+  position_ic_min: 0.02
+  position_ic_stability_min: 0.55
 
 validation:
   periods_per_year: 252

@@ -80,9 +80,9 @@ class TestLeverageInvariance:
         pnl = _make_pnl(n=500, mean=0.001)
         dates = _make_dates(n=500)
         pos = _make_positions(pnl)
-        m1 = compute_all_metrics(pnl, dates, pos)
-        m2 = compute_all_metrics(pnl * 2, dates, pos * 2)
-        assert abs(m1["ic"] - m2["ic"]) < 0.01
+        m1 = compute_all_metrics(pnl, dates, pos, asset_returns=pnl)
+        m2 = compute_all_metrics(pnl * 2, dates, pos * 2, asset_returns=pnl * 2)
+        assert abs(m1["position_ic"] - m2["position_ic"]) < 0.01
 
     def test_omega_invariant(self):
         pnl = _make_pnl(n=500, mean=0.001)
@@ -179,28 +179,28 @@ class TestValidationGate:
 
 class TestKeepDiscard:
     def test_improvement_keeps(self):
-        b = {"lo_adjusted": 2.0, "ic": 0.10, "omega": 2.0, "max_dd": -0.10}
-        c = {"lo_adjusted": 2.5, "ic": 0.12, "omega": 2.1, "max_dd": -0.08}
+        b = {"lo_adjusted": 2.0, "position_ic": 0.10, "omega": 2.0, "max_dd": -0.10}
+        c = {"lo_adjusted": 2.5, "position_ic": 0.12, "omega": 2.1, "max_dd": -0.08}
         assert decide_keep_discard(c, b, load_profile("crypto_daily")) == "KEEP"
 
     def test_regression_discards(self):
-        b = {"lo_adjusted": 2.0, "ic": 0.10, "omega": 2.0, "max_dd": -0.10}
-        c = {"lo_adjusted": 1.8, "ic": 0.12, "omega": 2.1, "max_dd": -0.08}
+        b = {"lo_adjusted": 2.0, "position_ic": 0.10, "omega": 2.0, "max_dd": -0.10}
+        c = {"lo_adjusted": 1.8, "position_ic": 0.12, "omega": 2.1, "max_dd": -0.08}
         assert decide_keep_discard(c, b, load_profile("crypto_daily")) == "DISCARD"
 
     def test_omega_guardrail(self):
-        b = {"lo_adjusted": 2.0, "ic": 0.10, "omega": 2.0, "max_dd": -0.10}
-        c = {"lo_adjusted": 2.5, "ic": 0.10, "omega": 1.8, "max_dd": -0.08}
+        b = {"lo_adjusted": 2.0, "position_ic": 0.10, "omega": 2.0, "max_dd": -0.10}
+        c = {"lo_adjusted": 2.5, "position_ic": 0.10, "omega": 1.8, "max_dd": -0.08}
         assert decide_keep_discard(c, b, load_profile("crypto_daily")) == "DISCARD"
 
     def test_ic_guardrail(self):
-        b = {"lo_adjusted": 2.0, "ic": 0.10, "omega": 2.0, "max_dd": -0.10}
-        c = {"lo_adjusted": 2.5, "ic": 0.08, "omega": 2.1, "max_dd": -0.08}
+        b = {"lo_adjusted": 2.0, "position_ic": 0.10, "omega": 2.0, "max_dd": -0.10}
+        c = {"lo_adjusted": 2.5, "position_ic": 0.08, "omega": 2.1, "max_dd": -0.08}
         assert decide_keep_discard(c, b, load_profile("crypto_daily")) == "DISCARD"
 
     def test_maxdd_gate_absolute(self):
-        b = {"lo_adjusted": 2.0, "ic": 0.10, "omega": 2.0, "max_dd": -0.10}
-        c = {"lo_adjusted": 3.0, "ic": 0.15, "omega": 2.5, "max_dd": -0.30}
+        b = {"lo_adjusted": 2.0, "position_ic": 0.10, "omega": 2.0, "max_dd": -0.10}
+        c = {"lo_adjusted": 3.0, "position_ic": 0.15, "omega": 2.5, "max_dd": -0.30}
         assert decide_keep_discard(c, b, load_profile("crypto_daily")) == "DISCARD"
 
 
@@ -215,6 +215,7 @@ class TestValidateStrategyIntegration:
         df = pd.DataFrame(
             {
                 "date": _make_dates(n=300),
+                "asset_return": pnl,
                 "pnl": pnl,
                 "position": _make_positions(pnl),
                 "cum_return": np.cumprod(1.0 + pnl) - 1.0,

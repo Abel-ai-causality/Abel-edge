@@ -69,14 +69,14 @@ Three leverage-invariant, mathematically orthogonal dimensions:
 ```
         Lo-adjusted Sharpe (ratio — optimized)
              /           \
-       IC (rank —          Omega (shape —
+       Position-Return IC (rank —  Omega (shape —
         guardrail)          guardrail)
 ```
 
 No known transformation improves all three simultaneously except genuine signal improvement:
 - **Clipping** inflates Sharpe but tanks Omega
 - **Serial correlation** inflates Sharpe but Lo catches it
-- **Concentration** boosts ratios but IC drops
+- **Concentration** boosts ratios but Position-Return IC drops
 
 Verified across 38 controlled experiments.
 

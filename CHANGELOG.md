@@ -7,7 +7,7 @@
 - **Stability gate redesign**: `T13 NegRoll` was replaced by direct drawdown-time gates on underwater bar fraction and maximum underwater duration in bars.
 - **Loss-year contract redesign**: `T14 LossYrs` now counts only full calendar years with negative total PnL, and partial-year backtests no longer activate the gate.
 - **Mathematical corrections**: no-loss `omega` now becomes an applicability case instead of a live gate failure, zero-drawdown `calmar` now normalizes to `0.0` instead of sentinel `999`, and constant-series `skew` now normalizes to `0.0` instead of `NaN`.
-- **Applicability semantics**: IC-family behavior is now explicit via `metrics["ic_applicable"]` rather than inferred from zero-valued IC metrics.
+- **Applicability semantics**: Position-Return IC behavior is now explicit via `position_ic_*_applicable` flags rather than inferred from zero-valued IC metrics.
 
 ### Removed / Deferred
 - **Unsupported live gate removed**: `T12 OOS/IS` and its split-Sharpe payload family (`oos_is`, `is_sharpe`, `oos_sharpe`) were removed because a final PnL path does not carry defensible IS/OOS provenance.
@@ -23,7 +23,7 @@
 
 ### Added
 - **Framework core**: StrategyEngine ABC, config loader, CLI (init/run/dashboard/validate/discover/status)
-- **Abel Proof validation**: initial validation gate with anti-gaming metric triangle (Lo-adjusted Sharpe, IC, Omega)
+- **Abel Proof validation**: initial validation gate with anti-gaming metric triangle (Lo-adjusted Sharpe, Position-Return IC, Omega)
 - **Dashboard**: Dark-theme static HTML with Plotly equity curves and position charts
 - **3 demo strategies**: SMA crossover (simple), Momentum ML (walk-forward GBDT), Causal Voting (Abel graph)
 - **Causal demo**: Bundled TON causal graph (5 parents + 3 children from Abel), vote² sizing, conviction threshold
