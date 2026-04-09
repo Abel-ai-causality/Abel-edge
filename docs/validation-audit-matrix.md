@@ -42,7 +42,7 @@ It records the audited live contract after remediation of gates, metrics, profil
 | `lo_adjusted` | rebuild | Retained ratio metric, simplified to a profile-aware lag-1 serial-correlation penalty |
 | `sortino` | keep | Retained as diagnostic payload metric |
 | `total_pnl` | keep | Retained as live anti-gaming input |
-| `max_dd` | keep | Retained as live gate and keep/discard input |
+| `max_dd` | rebuild | Unified to wealth-path percentage drawdown; runtime stores a non-positive fraction while reports display the absolute percentage |
 | `calmar` | rebuild | Retained but zero-drawdown sentinel normalized to `0.0` |
 | `dsr` | rebuild | Retained as a live overfitting gate with operator-supplied `dsr_trials` override and profile-default fallback |
 | `pbo` | defer | Removed from the live payload because a single strategy trade log does not provide the candidate-by-fold structure required for true PBO |

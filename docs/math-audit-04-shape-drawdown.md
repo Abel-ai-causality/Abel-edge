@@ -18,16 +18,17 @@ asymmetry, and drawdown severity.
 ### Total PnL
 
 ```python
-total_pnl = cumsum(pnl)[-1]
+equity = cumprod(1 + pnl)
+total_pnl = equity[-1] - 1
 ```
 
 ### Max drawdown
 
-The validation code computes drawdown in cumulative-PnL space:
+The validation and dashboard code now compute drawdown from the compounded wealth path:
 
 ```python
-cum = cumsum(pnl)
-dd = cum - maximum.accumulate(cum)
+equity = cumprod(1 + pnl)
+dd = equity / maximum.accumulate(equity) - 1
 max_dd = min(dd)
 ```
 
@@ -58,9 +59,8 @@ the returned metrics payload.
 
 ## Current Concerns
 
-1. Validation `max_dd` is in cumulative-return space, but dashboard `max_dd` is a
-   percentage drawdown on an equity curve. The repo therefore has two different
-   drawdown meanings.
+1. Runtime stores `max_dd` as a non-positive drawdown fraction, while the dashboard
+   displays `abs(max_dd)` as a positive percentage. The sign/display contract must stay explicit.
 2. The current Omega is a simplified discrete zero-threshold version, not the more
    general continuous-threshold Omega definition.
 3. The code computes `var_5` and `cvar_5` but does not expose them in the payload.
@@ -69,7 +69,7 @@ the returned metrics payload.
 
 ## Audit Questions
 
-1. Should validation and dashboard share one drawdown definition?
+1. Is the current runtime-negative / display-positive MaxDD contract explicit enough for operators?
 2. Is the current Omega definition sufficient for anti-clipping, or should the docs
    narrow their claim to a simple gain/loss asymmetry ratio?
 3. Should benchmark-relative Omega be added only after trade logs expose enough schema

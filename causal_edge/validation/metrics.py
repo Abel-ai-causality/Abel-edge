@@ -45,14 +45,17 @@ def load_profile(name_or_path: str) -> dict:
         return yaml.safe_load(f)
 
 
-def detect_profile(pnl: np.ndarray, dates: pd.DatetimeIndex) -> str:
+def detect_profile(
+    pnl: np.ndarray, dates: pd.DatetimeIndex, asset_returns: np.ndarray = None
+) -> str:
     """Auto-detect profile from data characteristics."""
     if len(dates) > 1:
         gaps = pd.Series(dates).diff().dropna()
         median_gap = gaps.median()
         if median_gap < pd.Timedelta(hours=1):
             return "hft"
-    ann_vol = np.std(pnl, ddof=1) * np.sqrt(252)
+    series = asset_returns if asset_returns is not None and len(asset_returns) == len(pnl) else pnl
+    ann_vol = np.std(series, ddof=1) * np.sqrt(252)
     if ann_vol > 0.60:
         return "crypto_daily"
     return "equity_daily"
@@ -243,7 +246,9 @@ def validate(metrics: dict, profile: dict) -> tuple[bool, list[str]]:
     ):
         failures.append(f"T15 Omega {metrics['omega']:.2f} < {v['omega_min']}")
     if metrics["max_dd"] < v.get("max_dd", -0.20):
-        failures.append(f"T15 MaxDD {metrics['max_dd'] * 100:.1f}% < {v['max_dd'] * 100:.0f}%")
+        failures.append(
+            f"T15 MaxDD {abs(metrics['max_dd']) * 100:.1f}% > {abs(v['max_dd']) * 100:.0f}%"
+        )
     if metrics["total_pnl"] < ag.get("pnl_floor", 1.0):
         failures.append(
             f"PnL floor {metrics['total_pnl'] * 100:+.1f}% < +{ag['pnl_floor'] * 100:.0f}%"
