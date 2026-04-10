@@ -14,23 +14,22 @@ description: >
 metric_triangle:
   optimize: lo_adjusted_sharpe
   guardrails:
-    - {metric: ic, tolerance: 0.005}
+    - {metric: position_ic, tolerance: 0.005}
     - {metric: omega, tolerance: 0.10}         # catches clipping (distribution shape space)
 
 anti_gaming:
-  pnl_floor: 1.0
-  max_dd_gate: -0.25                           # absolute gate (not relative comparison)
+  return_floor: 1.0
   sharpe_lo_ratio_max: 2.5
-  ic_min: 0.02
-  ic_stability_min: 0.50
+  position_ic_min: 0.02
+  position_ic_stability_min: 0.55
 
 validation:
+  periods_per_year: 365
   dsr_min: 0.90
   dsr_K: 300
-  pbo_max: 0.10
-  oos_is_min: 0.50
-  neg_roll_frac_max: 0.15
+  drawdown_time_frac_max: 0.35
+  max_drawdown_duration_bars_max: 91   # ~3 months at daily calendar-bar cadence
   max_loss_years: 2
   lo_adjusted_min: 1.0
   omega_min: 1.0
-  max_dd: -0.20
+  max_dd: -0.20                               # absolute gate and KEEP/DISCARD veto

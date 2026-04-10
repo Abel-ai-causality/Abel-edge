@@ -22,7 +22,7 @@ class MomentumMLEngine(StrategyEngine):
         super().__init__(context=context)
         self.n_days = n_days
         self.train_window = 126  # ~6 months rolling
-        self.retrain_every = 5   # retrain every 5 days (weekly)
+        self.retrain_every = 5  # retrain every 5 days (weekly)
 
     def compute_signals(self):
         """Generate synthetic prices and compute walk-forward ML signals."""
@@ -32,20 +32,22 @@ class MomentumMLEngine(StrategyEngine):
         # Add slight autocorrelation to make momentum features useful
         for i in range(1, len(raw_ret)):
             raw_ret[i] += 0.05 * raw_ret[i - 1]
-        prices = 100.0 * np.exp(np.cumsum(raw_ret))
+        prices = 100.0 * np.cumprod(1.0 + raw_ret)
         dates = pd.bdate_range(end="2026-01-01", periods=self.n_days)
-        returns = np.diff(np.log(prices), prepend=np.log(prices[0]))
-        returns[0] = 0.0
+        returns = np.zeros_like(prices)
+        returns[1:] = prices[1:] / prices[:-1] - 1.0
 
         # Features — ALL shifted by 1 to prevent look-ahead
         s = pd.Series(returns)
-        features = pd.DataFrame({
-            "ret_1d": s.shift(1),                          # yesterday's return
-            "ret_5d": s.rolling(5).sum().shift(1),         # 5-day momentum
-            "ret_20d": s.rolling(20).sum().shift(1),       # 20-day momentum
-            "vol_20d": s.rolling(20).std().shift(1),       # 20-day volatility
-            "rsi_14": _rsi(s, 14).shift(1),               # RSI(14)
-        })
+        features = pd.DataFrame(
+            {
+                "ret_1d": s.shift(1),  # yesterday's return
+                "ret_5d": s.rolling(5).sum().shift(1),  # 5-day momentum
+                "ret_20d": s.rolling(20).sum().shift(1),  # 20-day momentum
+                "vol_20d": s.rolling(20).std().shift(1),  # 20-day volatility
+                "rsi_14": _rsi(s, 14).shift(1),  # RSI(14)
+            }
+        )
 
         # Target: next-day direction (1=up, 0=down)
         target = (s > 0).astype(int)
@@ -71,7 +73,9 @@ class MomentumMLEngine(StrategyEngine):
                     continue
 
                 model = GradientBoostingClassifier(
-                    n_estimators=50, max_depth=3, learning_rate=0.1,
+                    n_estimators=50,
+                    max_depth=3,
+                    learning_rate=0.1,
                     random_state=42,
                 )
                 model.fit(X_train, y_train)
@@ -88,11 +92,11 @@ class MomentumMLEngine(StrategyEngine):
             # Long if P(up) > 0.55 (conservative threshold)
             positions[t] = 1.0 if prob[1] > 0.55 else 0.0
 
-        return positions, dates, returns, prices
+        return positions, dates, prices
 
     def get_latest_signal(self):
         """Return latest position from walk-forward model."""
-        positions, dates, _, prices = self.compute_signals()
+        positions, dates, prices = self.compute_signals()
         return {
             "position": float(positions[-1]),
             "date": str(dates[-1].date()),

@@ -6,7 +6,7 @@ Strategy execution framework. All engines implement `StrategyEngine` ABC from `c
 
 ### Create a new engine
 1. Copy `examples/sma_crossover/engine.py` as starting point
-2. Implement `compute_signals()` -> (positions, dates, returns, prices)
+2. Implement `compute_signals()` -> (positions, dates, prices)
 3. Implement `get_latest_signal()` -> dict with at least `position` key
 4. All features must use `shift(1)` — zero look-ahead tolerance
 5. Register in `strategies.yaml` with engine module path

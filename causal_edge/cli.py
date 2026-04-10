@@ -96,9 +96,15 @@ def dashboard(config, output):
 @click.option(
     "--csv", "csv_path", default=None, help="Validate a standalone CSV (date,pnl columns)"
 )
+@click.option(
+    "--dsr-trials",
+    type=int,
+    default=None,
+    help="Declared strategy exploration count used by DSR (overrides profile default)",
+)
 @click.option("--export", "export_path", default=None, help="Export report to file")
 @click.option("--config", default="strategies.yaml", help="Config file path")
-def validate(strategy, verbose, csv_path, export_path, config):
+def validate(strategy, verbose, csv_path, dsr_trials, export_path, config):
     """Run Abel Proof validation on strategies."""
     import io
     import sys
@@ -113,7 +119,7 @@ def validate(strategy, verbose, csv_path, export_path, config):
         # Quick path: validate a standalone CSV without strategies.yaml
         if not Path(csv_path).exists():
             raise click.ClickException(f"CSV not found: {csv_path}")
-        result = validate_strategy(csv_path)
+        result = validate_strategy(csv_path, dsr_trials=dsr_trials)
         results[Path(csv_path).stem] = result
     else:
         from causal_edge.config import load_config
@@ -140,7 +146,7 @@ def validate(strategy, verbose, csv_path, export_path, config):
                     "profile": "unknown",
                 }
                 continue
-            results[sid] = validate_strategy(log_path)
+            results[sid] = validate_strategy(log_path, dsr_trials=dsr_trials)
 
     # Capture output for --export
     if export_path:
@@ -159,17 +165,16 @@ def validate(strategy, verbose, csv_path, export_path, config):
                     "sharpe",
                     "lo_adjusted",
                     "sortino",
-                    "total_pnl",
+                    "total_return",
                     "max_dd",
                     "calmar",
                     "dsr",
-                    "pbo",
-                    "oos_is",
+                    "dsr_trials_used",
                     "omega",
-                    "ic",
-                    "ic_hit_rate",
+                    "position_ic",
+                    "position_hit_rate",
                 ):
-                    if key.startswith("ic") and not m.get("ic_applicable", False):
+                    if key.startswith("position_") and not m.get("position_ic_applicable", False):
                         continue
                     if key in m:
                         print(f"    {key:20s} {m[key]:.4f}")

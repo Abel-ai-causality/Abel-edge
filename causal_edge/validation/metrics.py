@@ -6,7 +6,7 @@ pandas, numpy, scipy.
 
 Metric triangle (leverage-invariant, orthogonal):
   - Ratio: Lo-adjusted Sharpe (crypto) or raw Sharpe (equity)
-  - Rank:  IC (Spearman rank correlation of position vs return)
+  - Rank:  Position-Return IC (Spearman rank correlation of position vs asset return)
   - Shape: Omega (sum of gains / sum of |losses|)
 
 Anti-gaming:
@@ -16,11 +16,12 @@ Anti-gaming:
 """
 
 import os
-from itertools import combinations
 
 import numpy as np
 import pandas as pd
 from scipy import stats as sp_stats
+
+from causal_edge.validation.position_ic import compute_position_ic
 
 PROFILES_DIR = os.path.join(os.path.dirname(__file__), "profiles")
 
@@ -44,14 +45,17 @@ def load_profile(name_or_path: str) -> dict:
         return yaml.safe_load(f)
 
 
-def detect_profile(pnl: np.ndarray, dates: pd.DatetimeIndex) -> str:
+def detect_profile(
+    pnl: np.ndarray, dates: pd.DatetimeIndex, asset_returns: np.ndarray = None
+) -> str:
     """Auto-detect profile from data characteristics."""
     if len(dates) > 1:
         gaps = pd.Series(dates).diff().dropna()
         median_gap = gaps.median()
         if median_gap < pd.Timedelta(hours=1):
             return "hft"
-    ann_vol = np.std(pnl, ddof=1) * np.sqrt(252)
+    series = asset_returns if asset_returns is not None and len(asset_returns) == len(pnl) else pnl
+    ann_vol = np.std(series, ddof=1) * np.sqrt(252)
     if ann_vol > 0.60:
         return "crypto_daily"
     return "equity_daily"
@@ -67,13 +71,16 @@ def compute_all_metrics(
     dates: pd.DatetimeIndex,
     positions: np.ndarray = None,
     profile: dict | None = None,
+    dsr_trials: int | None = None,
+    asset_returns: np.ndarray = None,
 ) -> dict:
     """Compute all strategy metrics from a PnL array.
 
     Args:
-        pnl: daily log-return PnL array
+        pnl: daily simple-return strategy PnL array
         dates: DatetimeIndex aligned with pnl
-        positions: optional position array for IC computation
+        positions: optional position array for position-return IC computation
+        asset_returns: optional underlying asset simple-return array aligned with pnl
 
     Returns dict with all metrics needed for validation gate.
     """
@@ -85,54 +92,60 @@ def compute_all_metrics(
     if positions is not None:
         positions = np.nan_to_num(positions, nan=0.0, posinf=0.0, neginf=0.0)
 
-    cum = np.cumsum(pnl)
-    dd = cum - np.maximum.accumulate(cum)
+    equity = np.cumprod(1.0 + pnl)
+    cum_return = equity - 1.0
+    peak_equity = np.maximum.accumulate(equity)
+    dd = (equity / peak_equity) - 1.0
     std = np.std(pnl, ddof=1)
+    validation_cfg = (profile or {}).get("validation", {})
+    periods_per_year = validation_cfg.get("periods_per_year", 252)
 
-    sharpe = float(np.mean(pnl) / std * np.sqrt(252)) if std > 0 else 0
-    sortino = _sortino(pnl)
+    sharpe = float(np.mean(pnl) / std * np.sqrt(periods_per_year)) if std > 0 else 0
+    sortino = _sortino(pnl, periods_per_year=periods_per_year)
     max_dd = float(np.min(dd))
-    calmar = float(cum[-1] / abs(max_dd)) if max_dd < 0 else 0.0
-    total_pnl = float(cum[-1])
+    total_return = float(cum_return[-1])
+    calmar = float(total_return / abs(max_dd)) if max_dd < 0 else 0.0
 
-    # Lo-adjusted Sharpe (serial correlation correction)
-    rho = [pd.Series(pnl).autocorr(lag=k) for k in range(1, 11)]
-    rho = [r if not np.isnan(r) else 0 for r in rho]
-    cf = 1 + 2 * sum(rho[k] * (1 - (k + 1) / 252) for k in range(10))
+    # Simplified serial-correlation penalty: lag-1 autocorrelation only.
+    rho1 = pd.Series(pnl).autocorr(lag=1)
+    rho1 = 0.0 if np.isnan(rho1) else float(rho1)
+    cf = 1 + 2 * rho1 * (1 - 1 / periods_per_year)
     lo_adjusted = sharpe * np.sqrt(1 / cf) if cf > 0 else sharpe
 
-    validation_cfg = (profile or {}).get("validation", {})
-    dsr = _dsr(pnl, T, K=validation_cfg.get("dsr_K", 300))
-    pbo, oos_sharpes = _cpcv(pnl, n_groups=16)
+    dsr_trials_used = dsr_trials if dsr_trials is not None else validation_cfg.get("dsr_K", 300)
+    dsr = _dsr(pnl, T, K=dsr_trials_used, periods_per_year=periods_per_year)
 
-    # OOS/IS (mechanical 50/50 split)
-    mid = T // 2
-    is_sh = _sharpe(pnl[:mid])
-    oos_sh = _sharpe(pnl[mid:])
-    oos_is = oos_sh / is_sh if is_sh != 0 else 0
-
-    # Year-by-year stability
+    # Year-by-year stability: count only full calendar years with negative total PnL.
     loss_years = 0
     yearly_sharpes = {}
-    for yr in sorted(dates.year.unique()):
-        ysh = _sharpe(pnl[dates.year == yr])
-        yearly_sharpes[yr] = ysh
-        if ysh < 0:
-            loss_years += 1
+    yearly_pnl = {}
+    full_years_count = 0
+    years = sorted(dates.year.unique())
+    for yr in years:
+        mask = dates.year == yr
+        year_dates = dates[mask]
+        year_pnl = pnl[mask]
+        yearly_sharpes[yr] = _sharpe(year_pnl, periods_per_year=periods_per_year)
+        total_year_pnl = float(np.cumprod(1.0 + year_pnl)[-1] - 1.0)
+        yearly_pnl[yr] = total_year_pnl
+        if _is_full_calendar_year(year_dates):
+            full_years_count += 1
+            if total_year_pnl < -1e-12:
+                loss_years += 1
+    loss_years_applicable = full_years_count > 0
 
-    # Rolling 252d Sharpe
-    roll_sharpes = [_sharpe(pnl[i - 252 : i]) for i in range(252, T, 63)]
-    neg_roll_frac = float(np.mean(np.array(roll_sharpes) < 0)) if roll_sharpes else 0
+    # Drawdown-time stability: fraction of bars underwater and longest underwater spell.
+    underwater = equity < (peak_equity - 1e-12)
+    drawdown_time_frac = float(np.mean(underwater)) if T > 0 else 0.0
+    max_drawdown_duration_bars = _max_true_run(underwater)
 
     # Omega (gain/loss asymmetry — catches clipping)
     active = pnl[np.abs(pnl) > 1e-10]
     gains = active[active > 0]
     losses = active[active < 0]
-    omega = (
-        float(np.sum(gains) / abs(np.sum(losses)))
-        if len(losses) > 0 and np.sum(losses) != 0
-        else 0.0
-    )
+    loss_mass = float(abs(np.sum(losses)))
+    omega_applicable = len(losses) > 0 and loss_mass > 1e-12
+    omega = float(np.sum(gains) / loss_mass) if omega_applicable else 0.0
 
     # Tail risk
     skew = float(sp_stats.skew(pnl)) if np.std(pnl) > 1e-10 else 0.0
@@ -142,12 +155,25 @@ def compute_all_metrics(
     sharpe_lo_ratio = sharpe / lo_adjusted if lo_adjusted > 0 else 999
     bootstrap_p = _bootstrap_sharpe(pnl, n_boot=validation_cfg.get("permutation_trials", 1000))
 
-    # IC (Information Coefficient)
-    ic, ic_hit_rate, ic_stability, ic_monthly_mean = 0.0, 0.0, 0.0, 0.0
-    ic_applicable = False
-    if positions is not None and len(positions) == T:
-        ic, ic_hit_rate, ic_stability, ic_monthly_mean = _compute_ic(pnl, positions, dates)
-        ic_applicable = True
+    # Position-Return IC (time-series Spearman rank correlation).
+    position_ic, position_hit_rate = 0.0, 0.0
+    position_ic_stability, position_ic_monthly_mean = 0.0, 0.0
+    position_ic_applicable = False
+    position_ic_stability_applicable = False
+    if (
+        positions is not None
+        and asset_returns is not None
+        and len(positions) == T
+        and len(asset_returns) == T
+    ):
+        (
+            position_ic,
+            position_hit_rate,
+            position_ic_stability,
+            position_ic_monthly_mean,
+            position_ic_applicable,
+            position_ic_stability_applicable,
+        ) = compute_position_ic(asset_returns, positions, dates)
 
     active_days = (
         int(np.sum(np.abs(positions) > 0.01))
@@ -159,28 +185,31 @@ def compute_all_metrics(
         "sharpe": sharpe,
         "lo_adjusted": lo_adjusted,
         "sortino": sortino,
-        "total_pnl": total_pnl,
+        "total_return": total_return,
         "max_dd": max_dd,
         "calmar": calmar,
         "dsr": dsr,
-        "pbo": pbo,
-        "oos_is": oos_is,
+        "dsr_trials_used": int(dsr_trials_used),
         "loss_years": loss_years,
-        "neg_roll_frac": neg_roll_frac,
+        "loss_years_applicable": loss_years_applicable,
+        "full_years_count": full_years_count,
+        "drawdown_time_frac": drawdown_time_frac,
+        "max_drawdown_duration_bars": max_drawdown_duration_bars,
         "omega": omega,
+        "omega_applicable": omega_applicable,
         "skew": skew,
         "sharpe_lo_ratio": sharpe_lo_ratio,
         "bootstrap_p": bootstrap_p,
-        "ic": ic,
-        "ic_hit_rate": ic_hit_rate,
-        "ic_stability": ic_stability,
-        "ic_monthly_mean": ic_monthly_mean,
-        "ic_applicable": ic_applicable,
+        "position_ic": position_ic,
+        "position_hit_rate": position_hit_rate,
+        "position_ic_stability": position_ic_stability,
+        "position_ic_monthly_mean": position_ic_monthly_mean,
+        "position_ic_applicable": position_ic_applicable,
+        "position_ic_stability_applicable": position_ic_stability_applicable,
         "active_days": active_days,
         "total_days": T,
         "yearly_sharpes": yearly_sharpes,
-        "is_sharpe": is_sh,
-        "oos_sharpe": oos_sh,
+        "yearly_pnl": yearly_pnl,
     }
 
 
@@ -197,25 +226,32 @@ def validate(metrics: dict, profile: dict) -> tuple[bool, list[str]]:
 
     if metrics["dsr"] < v.get("dsr_min", 0.90):
         failures.append(f"T6 DSR {metrics['dsr']:.1%} < {v['dsr_min']:.0%}")
-    if metrics["pbo"] > v.get("pbo_max", 0.10):
-        failures.append(f"T7 PBO {metrics['pbo']:.1%} > {v['pbo_max']:.0%}")
-    if abs(metrics["oos_is"]) < v.get("oos_is_min", 0.50):
-        failures.append(f"T12 OOS/IS {metrics['oos_is']:.2f} < {v['oos_is_min']}")
-    if metrics["neg_roll_frac"] > v.get("neg_roll_frac_max", 0.15):
+    if metrics["drawdown_time_frac"] > v.get("drawdown_time_frac_max", 0.35):
         failures.append(
-            f"T13 NegRoll {metrics['neg_roll_frac']:.0%} > {v['neg_roll_frac_max']:.0%}"
+            f"T13 DrawdownTime {metrics['drawdown_time_frac']:.0%} > {v['drawdown_time_frac_max']:.0%}"
         )
-    if metrics["loss_years"] > v.get("max_loss_years", 2):
+    max_dd_bars_limit = v.get("max_drawdown_duration_bars_max")
+    if max_dd_bars_limit is not None and metrics["max_drawdown_duration_bars"] > max_dd_bars_limit:
+        failures.append(
+            f"T13 MaxDDDuration {metrics['max_drawdown_duration_bars']} > {max_dd_bars_limit} bars"
+        )
+    if metrics.get("loss_years_applicable", False) and metrics["loss_years"] > v.get(
+        "max_loss_years", 2
+    ):
         failures.append(f"T14 LossYrs {metrics['loss_years']} > {v['max_loss_years']}")
     if metrics["lo_adjusted"] < v.get("lo_adjusted_min", 1.0):
         failures.append(f"T15 Lo {metrics['lo_adjusted']:.2f} < {v['lo_adjusted_min']}")
-    if metrics["omega"] < v.get("omega_min", 1.0):
+    if metrics.get("omega_applicable", False) and metrics["omega"] + 1e-12 < v.get(
+        "omega_min", 1.0
+    ):
         failures.append(f"T15 Omega {metrics['omega']:.2f} < {v['omega_min']}")
     if metrics["max_dd"] < v.get("max_dd", -0.20):
-        failures.append(f"T15 MaxDD {metrics['max_dd'] * 100:.1f}% < {v['max_dd'] * 100:.0f}%")
-    if metrics["total_pnl"] < ag.get("pnl_floor", 1.0):
         failures.append(
-            f"PnL floor {metrics['total_pnl'] * 100:+.1f}% < +{ag['pnl_floor'] * 100:.0f}%"
+            f"T15 MaxDD {abs(metrics['max_dd']) * 100:.1f}% > {abs(v['max_dd']) * 100:.0f}%"
+        )
+    if metrics["total_return"] < ag.get("return_floor", 1.0):
+        failures.append(
+            f"Return floor {metrics['total_return'] * 100:+.1f}% < +{ag['return_floor'] * 100:.0f}%"
         )
     if (
         metrics["sharpe"] > 0
@@ -225,12 +261,16 @@ def validate(metrics: dict, profile: dict) -> tuple[bool, list[str]]:
         failures.append(
             f"Sharpe/Lo {metrics['sharpe_lo_ratio']:.1f} > {ag['sharpe_lo_ratio_max']}"
         )
-    if metrics.get("ic_applicable", False) and metrics["ic"] < ag.get("ic_min", 0.02):
-        failures.append(f"IC {metrics['ic']:.3f} < {ag['ic_min']}")
-    if metrics.get("ic_applicable", False) and metrics["ic_stability"] < ag.get(
-        "ic_stability_min", 0.50
+    if metrics.get("position_ic_applicable", False) and metrics["position_ic"] < ag.get(
+        "position_ic_min", 0.02
     ):
-        failures.append(f"IC stab {metrics['ic_stability']:.0%} < {ag['ic_stability_min']:.0%}")
+        failures.append(f"PositionIC {metrics['position_ic']:.3f} < {ag['position_ic_min']}")
+    if metrics.get("position_ic_stability_applicable", False) and metrics[
+        "position_ic_stability"
+    ] < ag.get("position_ic_stability_min", 0.55):
+        failures.append(
+            f"PositionIC stab {metrics['position_ic_stability']:.0%} < {ag['position_ic_stability_min']:.0%}"
+        )
     return len(failures) == 0, failures
 
 
@@ -239,13 +279,14 @@ def decide_keep_discard(current: dict, baseline: dict, profile: dict) -> str:
 
     Three leverage-invariant, orthogonal dimensions:
       Ratio (Lo-adj or Sharpe) — optimized, must improve
-      Rank  (IC)               — guardrail, must not degrade
+      Rank  (Position IC)      — guardrail, must not degrade
       Shape (Omega)            — guardrail, catches clipping
 
     MaxDD is an absolute gate (not relative — scales with leverage).
     """
     mt = profile.get("metric_triangle", {})
     ag = profile.get("anti_gaming", {})
+    v = profile.get("validation", {})
 
     opt_key = {"lo_adjusted_sharpe": "lo_adjusted", "sharpe": "sharpe"}.get(
         mt.get("optimize", "lo_adjusted_sharpe"), "lo_adjusted"
@@ -254,18 +295,23 @@ def decide_keep_discard(current: dict, baseline: dict, profile: dict) -> str:
         return "DISCARD"
 
     for guard in mt.get("guardrails", []):
-        key = {"raw_sharpe": "sharpe", "ic": "ic", "omega": "omega", "total_pnl": "total_pnl"}.get(
-            guard["metric"], guard["metric"]
-        )
+        key = {
+            "raw_sharpe": "sharpe",
+            "ic": "position_ic",
+            "position_ic": "position_ic",
+            "omega": "omega",
+            "total_pnl": "total_return",
+            "total_return": "total_return",
+        }.get(guard["metric"], guard["metric"])
         tol = guard.get("tolerance", 0)
-        if key == "total_pnl" and baseline.get(key, 0) > 0:
+        if key == "total_return" and baseline.get(key, 0) > 0:
             if current.get(key, 0) < baseline[key] * (1 - tol):
                 return "DISCARD"
         else:
             if current.get(key, 0) < baseline.get(key, 0) - tol:
                 return "DISCARD"
 
-    if current.get("max_dd", 0) < ag.get("max_dd_gate", -0.25):
+    if current.get("max_dd", 0) < v.get("max_dd", -0.25):
         return "DISCARD"
 
     return "KEEP"
@@ -276,56 +322,55 @@ def decide_keep_discard(current: dict, baseline: dict, profile: dict) -> str:
 # ═══════════════════════════════════════════════════════════════════
 
 
-def _sharpe(pnl):
+def _sharpe(pnl, periods_per_year=252):
     s = np.std(pnl, ddof=1)
-    return float(np.mean(pnl) / s * np.sqrt(252)) if s > 0 else 0
+    return float(np.mean(pnl) / s * np.sqrt(periods_per_year)) if s > 0 else 0
 
 
-def _sortino(pnl):
+def _sortino(pnl, periods_per_year=252):
     down = pnl[pnl < 0]
     if len(down) < 2:
         return 0.0
     ds = np.std(down, ddof=1)
-    return float(np.mean(pnl) / ds * np.sqrt(252)) if ds > 1e-10 else 0.0
+    return float(np.mean(pnl) / ds * np.sqrt(periods_per_year)) if ds > 1e-10 else 0.0
 
 
-def _dsr(pnl, T, K=300):
+def _max_true_run(mask) -> int:
+    max_run = 0
+    run = 0
+    for flag in mask:
+        if flag:
+            run += 1
+            if run > max_run:
+                max_run = run
+        else:
+            run = 0
+    return int(max_run)
+
+
+def _is_full_calendar_year(year_dates: pd.DatetimeIndex) -> bool:
+    if len(year_dates) == 0:
+        return False
+    year = int(year_dates[0].year)
+    start = pd.Timestamp(year=year, month=1, day=1)
+    end = pd.Timestamp(year=year, month=12, day=31)
+    return year_dates.min() <= start and year_dates.max() >= end
+
+
+def _dsr(pnl, T, K=300, periods_per_year=252):
     """Deflated Sharpe Ratio (Bailey & Lopez de Prado 2014)."""
     std = np.std(pnl, ddof=1)
     if std == 0:
         return 0
-    sr_d = np.mean(pnl) / std
+    sr_d = (np.mean(pnl) / std) * np.sqrt(periods_per_year)
     skew = float(sp_stats.skew(pnl))
-    ekurt = float(sp_stats.kurtosis(pnl))
+    raw_kurt = float(sp_stats.kurtosis(pnl, fisher=False))
     gamma = 0.5772
     z1 = sp_stats.norm.ppf(1 - 1 / K)
     z2 = sp_stats.norm.ppf(1 - 1 / (K * np.e))
     emax = ((1 - gamma) * z1 + gamma * z2) / np.sqrt(T)
-    var_sr = (1 / T) * (1 - skew * sr_d + (ekurt / 4) * sr_d**2)
+    var_sr = (1 / T) * (1 - skew * sr_d + (raw_kurt / 4) * sr_d**2)
     return float(sp_stats.norm.cdf((sr_d - emax) / np.sqrt(max(var_sr, 1e-20))))
-
-
-def _cpcv(pnl, n_groups=16):
-    """PnL-path CPCV. Returns (PBO, oos_sharpes)."""
-    T = len(pnl)
-    while n_groups > 4 and T // n_groups < 20:
-        n_groups -= 2
-    if T // n_groups < 10:
-        return 0.0, []
-    gs = T // n_groups
-    gst = [j * gs for j in range(n_groups)]
-    gen = [min((j + 1) * gs, T) for j in range(n_groups)]
-    gen[-1] = T
-    oos_sharpes = []
-    for tg in combinations(range(n_groups), 2):
-        tm = np.zeros(T, dtype=bool)
-        for g in tg:
-            tm[gst[g] : gen[g]] = True
-        o = pnl[tm]
-        s = np.std(o, ddof=1)
-        oos_sharpes.append(np.mean(o) / s * np.sqrt(252) if s > 0 else 0)
-    pbo = float(np.mean(np.array(oos_sharpes) <= 0))
-    return pbo, oos_sharpes
 
 
 def _hill_estimator(pnl, quantile=0.05):
@@ -350,34 +395,3 @@ def _bootstrap_sharpe(pnl, n_boot=1000):
     T = len(pnl)
     boot = [_sharpe(rng.choice(pnl, size=T, replace=True)) for _ in range(n_boot)]
     return float(np.mean(np.array(boot) <= 0))
-
-
-def _compute_ic(pnl, positions, dates):
-    """Compute IC (Spearman) and monthly stability."""
-    active_mask = np.abs(positions) > 0.01
-    if active_mask.sum() < 30:
-        return 0.0, 0.0, 0.0, 0.0
-
-    ap, al = positions[active_mask], pnl[active_mask]
-    if np.std(ap) < 1e-10 or np.std(al) < 1e-10:
-        return 0.0, float(np.mean(np.sign(ap) == np.sign(al))), 0.0, 0.0
-
-    ic = float(sp_stats.spearmanr(ap, al)[0])
-    if np.isnan(ic):
-        ic = 0.0
-    hit_rate = float(np.mean(np.sign(ap) == np.sign(al)))
-
-    ad = dates[active_mask]
-    monthly_ics = []
-    for ym in sorted(set(zip(ad.year, ad.month))):
-        m = (ad.year == ym[0]) & (ad.month == ym[1])
-        if m.sum() > 5:
-            mp, ml = ap[m], al[m]
-            if np.std(mp) > 1e-10 and np.std(ml) > 1e-10:
-                mic = float(sp_stats.spearmanr(mp, ml)[0])
-                if not np.isnan(mic):
-                    monthly_ics.append(mic)
-
-    stability = float(np.mean(np.array(monthly_ics) > 0)) if monthly_ics else 0
-    monthly_mean = float(np.mean(monthly_ics)) if monthly_ics else 0
-    return ic, hit_rate, stability, monthly_mean

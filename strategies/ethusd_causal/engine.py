@@ -46,7 +46,7 @@ class ETHUSDCausalEngine(StrategyEngine):
             win = comp["window"]
             comp_bars = bars[bars["symbol"] == comp["ticker"]].copy()
             comp_bars = comp_bars.sort_values("timestamp")
-            aligned = comp_bars.set_index("timestamp")["close"].reindex(dates).ffill().bfill()
+            aligned = comp_bars.set_index("timestamp")["close"].reindex(dates).ffill()
             ret = aligned.pct_change().fillna(0.0)
             if win > 1:
                 sig = np.sign(ret.rolling(win).sum().shift(tau)).values
@@ -55,24 +55,25 @@ class ETHUSDCausalEngine(StrategyEngine):
             sig_matrix.append(np.nan_to_num(sig, nan=0.0))
 
         sig_matrix = np.array(sig_matrix)
+        n_days = len(dates)
         n_up = (sig_matrix > 0).sum(axis=0)
         n_down = (sig_matrix < 0).sum(axis=0)
         n_active = (sig_matrix != 0).sum(axis=0)
         vote_frac = np.divide(
             n_up,
             n_active,
-            out=np.full(self.n_days, 0.5, dtype=float),
+            out=np.full(n_days, 0.5, dtype=float),
             where=n_active > 0,
         )
 
-        positions = np.zeros(self.n_days)
+        positions = np.zeros(n_days)
         bull = n_up > n_down
         positions[bull] = vote_frac[bull] ** 2
         positions[bull & (vote_frac < CONVICTION_MIN)] = 0.0
-        return np.maximum(positions, 0.0), dates, target_ret, target_prices
+        return np.maximum(positions, 0.0), dates, target_prices
 
     def get_latest_signal(self):
-        positions, dates, _, prices = self.compute_signals()
+        positions, dates, prices = self.compute_signals()
         return {
             "position": float(positions[-1]),
             "date": str(dates[-1].date()),

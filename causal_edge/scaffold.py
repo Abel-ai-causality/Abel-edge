@@ -128,7 +128,7 @@ _CLAUDE_MD = """\
 ## Commands
 causal-edge run         # run strategies, write trade logs
 causal-edge dashboard   # generate dashboard.html
-causal-edge validate    # Abel Proof 15-test validation
+causal-edge validate    # Abel Proof audited validation
 causal-edge status      # show strategy summary
 """
 
@@ -173,15 +173,15 @@ class SMAEngine(StrategyEngine):
     def compute_signals(self):
         rng = np.random.default_rng(42)
         returns = rng.normal(0.0005, 0.02, self.n_days)
-        prices = 100.0 * np.exp(np.cumsum(returns))
+        prices = 100.0 * np.cumprod(1.0 + returns)
         dates = pd.bdate_range(end=pd.Timestamp.today(), periods=self.n_days)
         fast_ma = pd.Series(prices).rolling(self.fast).mean().shift(1).values
         slow_ma = pd.Series(prices).rolling(self.slow).mean().shift(1).values
         positions = np.where(fast_ma > slow_ma, 1.0, 0.0)
         positions[:self.slow + 1] = 0.0
-        return positions, dates, returns, prices
+        return positions, dates, prices
 
     def get_latest_signal(self):
-        positions, dates, _, prices = self.compute_signals()
+        positions, dates, prices = self.compute_signals()
         return {"position": float(positions[-1]), "date": str(dates[-1].date())}
 """

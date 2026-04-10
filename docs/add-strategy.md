@@ -2,15 +2,17 @@
 
 ## Fastest Path: Validate an Existing Backtest
 
-Already have a CSV with `date` and `pnl` columns? Skip everything — just validate:
+Already have a CSV with `date` and simple-return `pnl` columns? Skip everything — just validate:
 
 ```bash
 causal-edge validate --csv my_backtest.csv
 ```
 
-That's it. You'll get a 15-test report card in 2 seconds. No engine, no YAML, no setup.
+That's it. You'll get an audited validation report card in 2 seconds. No engine, no YAML, no setup.
 
-Add a `position` column for IC (Information Coefficient) analysis.
+Add `position` and `asset_return` columns for Position-Return IC analysis.
+
+Read `docs/validation-audit-matrix.md` for the long-lived timing and validation contract.
 
 ## Build a Strategy Engine
 
@@ -65,10 +67,9 @@ Your engine must implement `StrategyEngine` from `causal_edge/engine/base.py`:
 class MyEngine(StrategyEngine):
     def compute_signals(self):
         # Optional: load price bars via self.load_bars()
-        # Returns: (positions, dates, returns, prices)
+        # Returns: (positions, dates, prices)
         # positions: np.ndarray of daily position sizes (0=flat, 1=long)
         # dates: pd.DatetimeIndex
-        # returns: np.ndarray of daily asset returns
         # prices: np.ndarray of daily closing prices
         ...
 
@@ -83,3 +84,21 @@ class MyEngine(StrategyEngine):
 - `rolling().mean()` must be followed by `.shift(1)` before use in decisions
 - Clip returns for training features only, use unclipped for PnL
 - strategies/ must not import causal_edge/ internals (except base.py)
+
+## Timing Contract
+
+Validation assumes this bar-by-bar relationship:
+
+```text
+price[t-1], price[t] -> asset_return[t]
+information through t-1 -> position[t]
+position[t] * asset_return[t] -> pnl[t]
+cumprod(1 + pnl[:t]) - 1 -> cum_return[t]
+```
+
+## Audit Checklist
+
+- Every feature used to determine `position[t]` must be lagged by at least one bar.
+- No decision path may use `price[t]` or `asset_return[t]` when setting `position[t]`.
+- No alignment step may propagate future observations backward into earlier timestamps.
+- The emitted trade log must preserve `pnl[t] = position[t] * asset_return[t]`.

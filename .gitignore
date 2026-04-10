@@ -10,3 +10,8 @@ build/
 data/
 dashboard.html
 .ruff_cache/
+docs/tmp-math-audit/
+docs/math-audit-index.md
+.sisyphus/
+nul
+tmp_report.txt

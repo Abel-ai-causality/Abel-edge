@@ -17,7 +17,9 @@ These tests verify:
 import numpy as np
 import pandas as pd
 import pytest
+from scipy import stats as sp_stats
 
+from causal_edge.dashboard.components import compute_metrics as compute_dashboard_metrics
 from causal_edge.validation.metrics import (
     _sharpe,
     _sortino,
@@ -101,6 +103,20 @@ class TestSortino:
         pnl = np.abs(_make_pnl()) + 0.01
         assert _sortino(pnl) == 0.0  # no negative returns
 
+    def test_periods_per_year_changes_result(self):
+        pnl = _make_pnl(mean=0.001, std=0.02, n=252, seed=11)
+        assert _sortino(pnl, periods_per_year=252) != pytest.approx(
+            _sortino(pnl, periods_per_year=365), rel=1e-12
+        )
+
+
+class TestDashboardMetrics:
+    def test_sharpe_respects_periods_per_year(self):
+        pnl = _make_pnl(mean=0.001, std=0.02, n=252, seed=9)
+        daily = compute_dashboard_metrics(pnl, periods_per_year=252)
+        crypto = compute_dashboard_metrics(pnl, periods_per_year=365)
+        assert crypto["sharpe"] != pytest.approx(daily["sharpe"], rel=1e-12)
+
 
 class TestDSR:
     def test_strong_signal(self):
@@ -113,6 +129,30 @@ class TestDSR:
 
     def test_zero_std(self):
         assert _dsr(np.zeros(100), 100) == 0
+
+    def test_periods_per_year_changes_result(self):
+        pnl = _make_pnl(mean=0.0004, std=0.02, n=252, seed=7)
+        assert _dsr(pnl, 252, K=50, periods_per_year=252) != pytest.approx(
+            _dsr(pnl, 252, K=50, periods_per_year=365), rel=1e-12
+        )
+
+    def test_uses_raw_kurtosis_convention(self):
+        pnl = _make_pnl(mean=0.0004, std=0.02, n=252, seed=7)
+        std = np.std(pnl, ddof=1)
+        sr_d = (np.mean(pnl) / std) * np.sqrt(252)
+        skew = float(sp_stats.skew(pnl))
+        raw_kurt = float(sp_stats.kurtosis(pnl, fisher=False))
+        excess_kurt = float(sp_stats.kurtosis(pnl))
+        gamma = 0.5772
+        z1 = sp_stats.norm.ppf(1 - 1 / 50)
+        z2 = sp_stats.norm.ppf(1 - 1 / (50 * np.e))
+        emax = ((1 - gamma) * z1 + gamma * z2) / np.sqrt(252)
+        raw_var = (1 / 252) * (1 - skew * sr_d + (raw_kurt / 4) * sr_d**2)
+        excess_var = (1 / 252) * (1 - skew * sr_d + (excess_kurt / 4) * sr_d**2)
+        expected = float(sp_stats.norm.cdf((sr_d - emax) / np.sqrt(max(raw_var, 1e-20))))
+        excess_based = float(sp_stats.norm.cdf((sr_d - emax) / np.sqrt(max(excess_var, 1e-20))))
+        assert _dsr(pnl, 252, K=50, periods_per_year=252) == pytest.approx(expected, rel=1e-12)
+        assert expected != pytest.approx(excess_based, rel=1e-12)
 
 
 class TestHillEstimator:
@@ -144,56 +184,69 @@ class TestBootstrap:
 class TestComputeAllMetrics:
     def test_returns_all_keys(self, good_strategy):
         pnl, dates, pos = good_strategy
-        m = compute_all_metrics(pnl, dates, pos)
+        m = compute_all_metrics(pnl, dates, pos, asset_returns=pnl)
         required_keys = [
             "sharpe",
             "lo_adjusted",
             "sortino",
-            "total_pnl",
+            "total_return",
             "max_dd",
             "calmar",
             "dsr",
-            "pbo",
-            "oos_is",
+            "dsr_trials_used",
             "loss_years",
-            "neg_roll_frac",
+            "loss_years_applicable",
+            "full_years_count",
+            "drawdown_time_frac",
+            "max_drawdown_duration_bars",
             "omega",
+            "omega_applicable",
             "skew",
             "sharpe_lo_ratio",
             "bootstrap_p",
-            "ic",
-            "ic_hit_rate",
-            "ic_stability",
-            "ic_monthly_mean",
-            "ic_applicable",
+            "position_ic",
+            "position_hit_rate",
+            "position_ic_stability",
+            "position_ic_monthly_mean",
+            "position_ic_applicable",
+            "position_ic_stability_applicable",
             "active_days",
             "total_days",
             "yearly_sharpes",
-            "is_sharpe",
-            "oos_sharpe",
+            "yearly_pnl",
         ]
         for key in required_keys:
             assert key in m, f"Missing key: {key}"
 
     def test_sharpe_positive_for_good_strategy(self, good_strategy):
         pnl, dates, pos = good_strategy
-        m = compute_all_metrics(pnl, dates, pos)
+        m = compute_all_metrics(pnl, dates, pos, asset_returns=pnl)
         assert m["sharpe"] > 1.0
 
     def test_omega_above_one_for_positive(self, good_strategy):
         pnl, dates, pos = good_strategy
-        m = compute_all_metrics(pnl, dates, pos)
+        m = compute_all_metrics(pnl, dates, pos, asset_returns=pnl)
         assert m["omega"] > 1.0
 
-    def test_ic_computed_with_positions(self):
-        """IC should be nonzero when positions genuinely predict returns."""
+    def test_position_ic_computed_with_positions(self):
+        """Position-return IC should be nonzero when positions genuinely predict returns."""
         rng = np.random.RandomState(42)
-        pnl = rng.normal(0.001, 0.02, 500)
+        asset_returns = rng.normal(0.001, 0.02, 500)
         dates = _make_dates(n=500)
-        # Positions proportional to return magnitude → strong Spearman correlation
-        pos = pnl * 10 + 0.5  # varied sizes, centered around 0.5
-        m = compute_all_metrics(pnl, dates, pos)
-        assert m["ic"] > 0.3  # strong positive IC
+        pos = asset_returns * 10 + 0.5
+        pnl = pos * asset_returns
+        m = compute_all_metrics(pnl, dates, pos, asset_returns=asset_returns)
+        assert m["position_ic"] > 0.3
+
+    def test_position_ic_low_variance_inputs_remain_applicable(self):
+        dates = _make_dates(n=500)
+        asset_returns = np.full(500, 0.01)
+        pos = np.full(500, 0.5)
+        pnl = pos * asset_returns
+        m = compute_all_metrics(pnl, dates, pos, asset_returns=asset_returns)
+        assert m["position_ic_applicable"] is True
+        assert m["position_ic_stability_applicable"] is False
+        assert m["position_ic"] == 0.0
 
     def test_too_short_raises(self):
         with pytest.raises(ValueError, match="at least 30"):

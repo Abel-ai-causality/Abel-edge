@@ -27,13 +27,16 @@ from causal_edge.validation.gate import validate_strategy
 def _make_pnl(n=500, mean=0.001, std=0.02, seed=42):
     return np.random.RandomState(seed).normal(mean, std, n)
 
+
 def _make_dates(n=500, start="2020-01-01"):
     return pd.bdate_range(start, periods=n)
+
 
 def _make_positions(pnl, lag=1):
     pos = np.zeros_like(pnl)
     pos[lag:] = np.sign(pnl[:-lag]) * 0.5 + 0.5
     return pos
+
 
 @pytest.fixture
 def good_strategy():
@@ -41,6 +44,7 @@ def good_strategy():
     dates = _make_dates(n=750)
     pos = _make_positions(pnl, lag=1)
     return pnl, dates, pos
+
 
 @pytest.fixture
 def bad_strategy():
@@ -54,11 +58,13 @@ def bad_strategy():
 # TRIANGLE INVARIANT TESTS
 # ═══════════════════════════════════════════════════════════════════
 
+
 class TestLeverageInvariance:
     """Metric triangle must be leverage-invariant.
     Scaling PnL by 2x must NOT change Lo, IC, or Omega.
     MaxDD DOES scale (that's why it's not in the triangle).
     """
+
     def test_sharpe_invariant(self):
         pnl = _make_pnl(n=500, mean=0.001)
         assert abs(_sharpe(pnl) - _sharpe(pnl * 2)) < 0.01
@@ -74,9 +80,9 @@ class TestLeverageInvariance:
         pnl = _make_pnl(n=500, mean=0.001)
         dates = _make_dates(n=500)
         pos = _make_positions(pnl)
-        m1 = compute_all_metrics(pnl, dates, pos)
-        m2 = compute_all_metrics(pnl * 2, dates, pos * 2)
-        assert abs(m1["ic"] - m2["ic"]) < 0.01
+        m1 = compute_all_metrics(pnl, dates, pos, asset_returns=pnl)
+        m2 = compute_all_metrics(pnl * 2, dates, pos * 2, asset_returns=pnl * 2)
+        assert abs(m1["position_ic"] - m2["position_ic"]) < 0.01
 
     def test_omega_invariant(self):
         pnl = _make_pnl(n=500, mean=0.001)
@@ -133,6 +139,7 @@ class TestSerialCorrelationDetection:
 # Profile & Gate Tests
 # ═══════════════════════════════════════════════════════════════════
 
+
 class TestProfileLoading:
     def test_crypto_daily(self):
         p = load_profile("crypto_daily")
@@ -172,41 +179,59 @@ class TestValidationGate:
 
 class TestKeepDiscard:
     def test_improvement_keeps(self):
-        b = {"lo_adjusted": 2.0, "ic": 0.10, "omega": 2.0, "max_dd": -0.10}
-        c = {"lo_adjusted": 2.5, "ic": 0.12, "omega": 2.1, "max_dd": -0.08}
+        b = {"lo_adjusted": 2.0, "position_ic": 0.10, "omega": 2.0, "max_dd": -0.10}
+        c = {"lo_adjusted": 2.5, "position_ic": 0.12, "omega": 2.1, "max_dd": -0.08}
         assert decide_keep_discard(c, b, load_profile("crypto_daily")) == "KEEP"
 
     def test_regression_discards(self):
-        b = {"lo_adjusted": 2.0, "ic": 0.10, "omega": 2.0, "max_dd": -0.10}
-        c = {"lo_adjusted": 1.8, "ic": 0.12, "omega": 2.1, "max_dd": -0.08}
+        b = {"lo_adjusted": 2.0, "position_ic": 0.10, "omega": 2.0, "max_dd": -0.10}
+        c = {"lo_adjusted": 1.8, "position_ic": 0.12, "omega": 2.1, "max_dd": -0.08}
         assert decide_keep_discard(c, b, load_profile("crypto_daily")) == "DISCARD"
 
     def test_omega_guardrail(self):
-        b = {"lo_adjusted": 2.0, "ic": 0.10, "omega": 2.0, "max_dd": -0.10}
-        c = {"lo_adjusted": 2.5, "ic": 0.10, "omega": 1.8, "max_dd": -0.08}
+        b = {"lo_adjusted": 2.0, "position_ic": 0.10, "omega": 2.0, "max_dd": -0.10}
+        c = {"lo_adjusted": 2.5, "position_ic": 0.10, "omega": 1.8, "max_dd": -0.08}
         assert decide_keep_discard(c, b, load_profile("crypto_daily")) == "DISCARD"
 
     def test_ic_guardrail(self):
-        b = {"lo_adjusted": 2.0, "ic": 0.10, "omega": 2.0, "max_dd": -0.10}
-        c = {"lo_adjusted": 2.5, "ic": 0.08, "omega": 2.1, "max_dd": -0.08}
+        b = {"lo_adjusted": 2.0, "position_ic": 0.10, "omega": 2.0, "max_dd": -0.10}
+        c = {"lo_adjusted": 2.5, "position_ic": 0.08, "omega": 2.1, "max_dd": -0.08}
         assert decide_keep_discard(c, b, load_profile("crypto_daily")) == "DISCARD"
 
     def test_maxdd_gate_absolute(self):
-        b = {"lo_adjusted": 2.0, "ic": 0.10, "omega": 2.0, "max_dd": -0.10}
-        c = {"lo_adjusted": 3.0, "ic": 0.15, "omega": 2.5, "max_dd": -0.30}
+        b = {"lo_adjusted": 2.0, "position_ic": 0.10, "omega": 2.0, "max_dd": -0.10}
+        c = {"lo_adjusted": 3.0, "position_ic": 0.15, "omega": 2.5, "max_dd": -0.30}
         assert decide_keep_discard(c, b, load_profile("crypto_daily")) == "DISCARD"
+
+    def test_maxdd_uses_validation_policy_key(self):
+        profile = {
+            "metric_triangle": {"optimize": "sharpe", "guardrails": []},
+            "anti_gaming": {},
+            "validation": {"max_dd": -0.20},
+        }
+        b = {"sharpe": 1.0, "max_dd": -0.10}
+        c = {"sharpe": 2.0, "max_dd": -0.25}
+        assert decide_keep_discard(c, b, profile) == "DISCARD"
 
 
 # ═══════════════════════════════════════════════════════════════════
 # Integration
 # ═══════════════════════════════════════════════════════════════════
 
+
 class TestValidateStrategyIntegration:
     def test_with_csv(self, tmp_path):
         pnl = _make_pnl(n=300, mean=0.001, std=0.015)
-        df = pd.DataFrame({"date": _make_dates(n=300), "pnl": pnl,
-                           "position": _make_positions(pnl),
-                           "cum_pnl": np.cumsum(pnl), "source": "backfill"})
+        df = pd.DataFrame(
+            {
+                "date": _make_dates(n=300),
+                "asset_return": pnl,
+                "pnl": pnl,
+                "position": _make_positions(pnl),
+                "cum_return": np.cumprod(1.0 + pnl) - 1.0,
+                "source": "backfill",
+            }
+        )
         csv_path = tmp_path / "trade_log_test.csv"
         df.to_csv(csv_path, index=False)
         result = validate_strategy(csv_path, profile="equity_daily")
