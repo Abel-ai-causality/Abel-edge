@@ -194,7 +194,10 @@ class AbelClient:
         result_url: str | None,
         poll_token: str | None,
         poll_interval: float,
+        max_poll_seconds: float = 120,
     ) -> dict[str, Any]:
+        import time
+
         if result_url:
             url = result_url
         elif poll_token:
@@ -204,7 +207,13 @@ class AbelClient:
         else:
             raise RuntimeError("OAuth handoff missing resultUrl and pollToken.")
 
+        deadline = time.monotonic() + max_poll_seconds
         while True:
+            if time.monotonic() > deadline:
+                raise TimeoutError(
+                    f"Abel OAuth polling timed out after {max_poll_seconds}s. "
+                    "Complete browser authorization and retry."
+                )
             response = self.session.get(url, timeout=20)
             response.raise_for_status()
             payload = response.json()
@@ -216,8 +225,6 @@ class AbelClient:
                 raise RuntimeError(data.get("message") or "Abel authorization failed.")
             if status != "pending":
                 raise RuntimeError(f"Unexpected Abel authorization status: {status!r}")
-            import time
-
             time.sleep(poll_interval)
 
     def _post_cap(self, *, verb: str, params: dict[str, Any], api_key: str) -> dict[str, Any]:

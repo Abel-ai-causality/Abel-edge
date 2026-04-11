@@ -66,6 +66,17 @@ def validate_strategy(
         df["asset_return"].values.astype(float) if "asset_return" in df.columns else None
     )
 
+    # PnL consistency check: |pnl - position * asset_return| should be small
+    warnings: list[str] = []
+    if positions is not None and asset_returns is not None:
+        residuals = np.abs(pnl - positions * asset_returns)
+        p95 = float(np.percentile(residuals, 95))
+        if p95 >= 0.01:
+            warnings.append(
+                f"PnL consistency: 95th percentile of |pnl - position * asset_return| = {p95:.4f} "
+                f"(threshold 0.01). Check for fees, slippage, or data errors."
+            )
+
     # Auto-detect or load profile
     if profile is None:
         profile_name = detect_profile(pnl, dates, asset_returns=asset_returns)
@@ -113,6 +124,7 @@ def validate_strategy(
         "verdict": "PASS" if passed else "FAIL",
         "score": f"{total_tests - len(failures)}/{total_tests}",
         "failures": failures,
+        "warnings": warnings,
         "metrics": metrics,
         "triangle": triangle,
         "profile": profile_name,
