@@ -184,6 +184,8 @@ def print_validation_report(results: dict) -> None:
             for f in r["failures"]:
                 label = "SKIP" if verdict == "SKIP" else "FAIL"
                 print(f"      {label}: {f}")
+        for w in r.get("warnings", []):
+            print(f"      WARN: {w}")
 
     n_pass = sum(1 for r in results.values() if r["verdict"] == "PASS")
     n_fail = sum(1 for r in results.values() if r["verdict"] == "FAIL")
