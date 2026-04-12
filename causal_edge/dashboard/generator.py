@@ -86,7 +86,7 @@ def generate(config_path: str, output_path: str) -> None:
 
     env = Environment(
         loader=FileSystemLoader(str(TEMPLATES_DIR)),
-        autoescape=False,
+        autoescape=True,
     )
     # Register helper functions
     env.globals["fmt_pnl_pct"] = fmt_pnl_pct

@@ -100,17 +100,24 @@ def compute_all_metrics(
     validation_cfg = (profile or {}).get("validation", {})
     periods_per_year = validation_cfg.get("periods_per_year", 252)
 
-    sharpe = float(np.mean(pnl) / std * np.sqrt(periods_per_year)) if std > 0 else 0
+    sharpe = float(np.mean(pnl) / std * np.sqrt(periods_per_year)) if std > 1e-10 else 0
     sortino = _sortino(pnl, periods_per_year=periods_per_year)
     max_dd = float(np.min(dd))
     total_return = float(cum_return[-1])
     calmar = float(total_return / abs(max_dd)) if max_dd < 0 else 0.0
 
-    # Simplified serial-correlation penalty: lag-1 autocorrelation only.
-    rho1 = pd.Series(pnl).autocorr(lag=1)
-    rho1 = 0.0 if np.isnan(rho1) else float(rho1)
-    cf = 1 + 2 * rho1 * (1 - 1 / periods_per_year)
-    lo_adjusted = sharpe * np.sqrt(1 / cf) if cf > 0 else sharpe
+    # Lo (2002) Eq 6: eta(q) = q * (1 + 2 * sum_{k=1}^{q-1} (1-k/q)*rho_k)
+    # Use up to min(q-1, 10) lags (standard practice).
+    q = periods_per_year
+    max_lag = min(q - 1, 10)
+    pnl_series = pd.Series(pnl)
+    rho_sum = 0.0
+    for k in range(1, max_lag + 1):
+        rk = pnl_series.autocorr(lag=k)
+        rk = 0.0 if np.isnan(rk) else float(rk)
+        rho_sum += (1 - k / q) * rk
+    eta_q = q * (1 + 2 * rho_sum)
+    lo_adjusted = sharpe * np.sqrt(q / eta_q) if eta_q > 0 else sharpe
 
     dsr_trials_used = dsr_trials if dsr_trials is not None else validation_cfg.get("dsr_K", 300)
     dsr = _dsr(pnl, T, K=dsr_trials_used, periods_per_year=periods_per_year)
@@ -324,7 +331,7 @@ def decide_keep_discard(current: dict, baseline: dict, profile: dict) -> str:
 
 def _sharpe(pnl, periods_per_year=252):
     s = np.std(pnl, ddof=1)
-    return float(np.mean(pnl) / s * np.sqrt(periods_per_year)) if s > 0 else 0
+    return float(np.mean(pnl) / s * np.sqrt(periods_per_year)) if s > 1e-10 else 0
 
 
 def _sortino(pnl, periods_per_year=252):
@@ -372,21 +379,6 @@ def _dsr(pnl, T, K=300, periods_per_year=252):
     var_sr = (1 / T) * (1 - skew * sr_d + (raw_kurt / 4) * sr_d**2)
     return float(sp_stats.norm.cdf((sr_d - emax) / np.sqrt(max(var_sr, 1e-20))))
 
-
-def _hill_estimator(pnl, quantile=0.05):
-    """Hill tail index estimator for the lower tail."""
-    losses = -pnl[pnl < 0]
-    if len(losses) < 20:
-        return 4.0
-    losses_sorted = np.sort(losses)[::-1]
-    k = max(20, int(len(losses) * quantile))
-    k = min(k, len(losses_sorted) - 1)
-    threshold = losses_sorted[k]
-    if threshold <= 0:
-        return 4.0
-    log_excesses = np.log(losses_sorted[:k] / threshold)
-    alpha = k / np.sum(log_excesses) if np.sum(log_excesses) > 0 else 4.0
-    return float(alpha)
 
 
 def _bootstrap_sharpe(pnl, n_boot=1000):
