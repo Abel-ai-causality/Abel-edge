@@ -137,7 +137,7 @@ def compute_all_metrics(
         yearly_sharpes[yr] = _sharpe(year_pnl, periods_per_year=periods_per_year)
         total_year_pnl = float(np.cumprod(1.0 + year_pnl)[-1] - 1.0)
         yearly_pnl[yr] = total_year_pnl
-        if _is_full_calendar_year(year_dates):
+        if _is_full_calendar_year(year_dates, periods_per_year=periods_per_year):
             full_years_count += 1
             if total_year_pnl < -1e-12:
                 loss_years += 1
@@ -356,18 +356,22 @@ def _max_true_run(mask) -> int:
     return int(max_run)
 
 
-def _is_full_calendar_year(year_dates: pd.DatetimeIndex) -> bool:
+def _is_full_calendar_year(
+    year_dates: pd.DatetimeIndex, periods_per_year: int = 252
+) -> bool:
     """Check if year_dates span a full calendar year.
 
-    Tolerates up to 5 days at each boundary to handle equity markets
-    where Jan 1 and Dec 31 are often non-trading days.
+    Tolerance is profile-driven:
+      - Equity (252 periods/yr): ±5 days to handle non-trading Jan 1/Dec 31.
+      - Crypto/24-7 (365 periods/yr): ±1 day (trades every calendar day).
     """
     if len(year_dates) == 0:
         return False
     year = int(year_dates[0].year)
     start = pd.Timestamp(year=year, month=1, day=1)
     end = pd.Timestamp(year=year, month=12, day=31)
-    tolerance = pd.Timedelta(days=5)
+    tolerance_days = 5 if periods_per_year <= 252 else 1
+    tolerance = pd.Timedelta(days=tolerance_days)
     return year_dates.min() <= start + tolerance and year_dates.max() >= end - tolerance
 
 
