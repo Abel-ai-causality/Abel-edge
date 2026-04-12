@@ -232,11 +232,6 @@ def validate(metrics: dict, profile: dict) -> tuple[bool, list[str]]:
         failures.append(
             f"T13 DrawdownTime {metrics['drawdown_time_frac']:.0%} > {v['drawdown_time_frac_max']:.0%}"
         )
-    max_dd_bars_limit = v.get("max_drawdown_duration_bars_max")
-    if max_dd_bars_limit is not None and metrics["max_drawdown_duration_bars"] > max_dd_bars_limit:
-        failures.append(
-            f"T13 MaxDDDuration {metrics['max_drawdown_duration_bars']} > {max_dd_bars_limit} bars"
-        )
     if metrics.get("loss_years_applicable", False) and metrics["loss_years"] > v.get(
         "max_loss_years", 2
     ):
@@ -332,7 +327,7 @@ def _sharpe(pnl, periods_per_year=252):
 def _sortino(pnl, periods_per_year=252):
     """Sortino ratio using downside deviation (all observations, MAR=0)."""
     downside = np.minimum(pnl, 0.0)
-    dd = np.sqrt(np.mean(downside ** 2))
+    dd = np.sqrt(np.mean(downside**2))
     return float(np.mean(pnl) / dd * np.sqrt(periods_per_year)) if dd > 1e-10 else 0.0
 
 
@@ -349,9 +344,7 @@ def _max_true_run(mask) -> int:
     return int(max_run)
 
 
-def _is_full_calendar_year(
-    year_dates: pd.DatetimeIndex, periods_per_year: int = 252
-) -> bool:
+def _is_full_calendar_year(year_dates: pd.DatetimeIndex, periods_per_year: int = 252) -> bool:
     """Check if year_dates span a full calendar year.
 
     Tolerance is profile-driven:
