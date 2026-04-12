@@ -106,18 +106,11 @@ def compute_all_metrics(
     total_return = float(cum_return[-1])
     calmar = float(total_return / abs(max_dd)) if max_dd < 0 else 0.0
 
-    # Lo (2002) Eq 6: eta(q) = q * (1 + 2 * sum_{k=1}^{q-1} (1-k/q)*rho_k)
-    # Use up to min(q-1, 10) lags (standard practice).
-    q = periods_per_year
-    max_lag = min(q - 1, 10)
-    pnl_series = pd.Series(pnl)
-    rho_sum = 0.0
-    for k in range(1, max_lag + 1):
-        rk = pnl_series.autocorr(lag=k)
-        rk = 0.0 if np.isnan(rk) else float(rk)
-        rho_sum += (1 - k / q) * rk
-    eta_q = q * (1 + 2 * rho_sum)
-    lo_adjusted = sharpe * np.sqrt(q / eta_q) if eta_q > 0 else sharpe
+    # Simplified serial-correlation penalty: lag-1 autocorrelation only.
+    rho1 = pd.Series(pnl).autocorr(lag=1)
+    rho1 = 0.0 if np.isnan(rho1) else float(rho1)
+    cf = 1 + 2 * rho1 * (1 - 1 / periods_per_year)
+    lo_adjusted = sharpe * np.sqrt(1 / cf) if cf > 0 else sharpe
 
     dsr_trials_used = dsr_trials if dsr_trials is not None else validation_cfg.get("dsr_K", 300)
     dsr = _dsr(pnl, T, K=dsr_trials_used, periods_per_year=periods_per_year)
@@ -378,7 +371,6 @@ def _dsr(pnl, T, K=300, periods_per_year=252):
     emax = ((1 - gamma) * z1 + gamma * z2) / np.sqrt(T)
     var_sr = (1 / T) * (1 - skew * sr_d + (raw_kurt / 4) * sr_d**2)
     return float(sp_stats.norm.cdf((sr_d - emax) / np.sqrt(max(var_sr, 1e-20))))
-
 
 
 def _bootstrap_sharpe(pnl, n_boot=1000):

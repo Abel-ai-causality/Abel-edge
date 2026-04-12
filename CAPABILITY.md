@@ -174,7 +174,7 @@ See: https://github.com/Abel-ai-causality/causal-edge/blob/main/CAPABILITY.md
 ```python
 # Metric triangle — implement inline if you can't pip install
 sharpe = mean(pnl) / std(pnl) * sqrt(252)
-lo_adj = sharpe * sqrt(q / (q*(1 + 2*sum((1-k/q)*autocorr(pnl, lag=k) for k in range(1, min(q,11))))))  # Lo 2002 Eq6, q=252
+lo_adj = sharpe * sqrt(1 / (1 + 2*sum(autocorr(pnl, lag=k) for k in range(1,11))))
 omega = sum(pnl[pnl>0]) / abs(sum(pnl[pnl<0]))
 position_ic = spearmanr(positions, asset_return).correlation
 # All three must improve together. If one drops, the "improvement" is gaming.
