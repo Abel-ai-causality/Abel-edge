@@ -86,6 +86,23 @@ def _normalize_market_fields(fields: list[str] | None) -> list[str]:
     return normalized
 
 
+def _normalize_market_symbol(value: str) -> str:
+    """Normalize public aliases without destroying exchange-qualified tickers."""
+
+    normalized = str(value or "").strip().upper()
+    if not normalized:
+        raise ValueError("Market symbol cannot be empty.")
+    ticker, dot, suffix = normalized.rpartition(".")
+    if dot and suffix.lower() in SUPPORTED_FIELDS:
+        return ticker
+    ticker, underscore, suffix = normalized.rpartition("_")
+    if underscore and suffix.lower() in {"price", "close", "volume"}:
+        return ticker
+    if normalized in CRYPTO_ALIASES:
+        return f"{normalized}USD"
+    return normalized
+
+
 class AbelClient:
     def __init__(
         self,
@@ -153,7 +170,7 @@ class AbelClient:
             endpoint="day_bar",
             body={
                 "symbols": [
-                    normalize_public_node_id(symbol, default_field="price").split(".")[0]
+                    _normalize_market_symbol(symbol)
                     for symbol in symbols
                 ],
                 "start": _serialize_timestamp(start),
@@ -161,6 +178,35 @@ class AbelClient:
                 "timeframe": timeframe,
                 "limit": limit,
                 "fields": _normalize_market_fields(fields),
+            },
+            api_key=api_key,
+        )
+        items = payload.get("data") or payload.get("result") or []
+        if isinstance(items, dict):
+            items = items.get("items") or items.get("bars") or []
+        return items
+
+    def fetch_node_series(
+        self,
+        *,
+        node_id: str,
+        start: str | None,
+        end: str | None,
+        limit: int | None,
+        api_key: str,
+    ) -> Any:
+        """Fetch one unadjusted canonical-node series by its exact V4 id."""
+
+        canonical_id = str(node_id or "").strip()
+        if not canonical_id:
+            raise ValueError("Canonical node_id cannot be empty.")
+        payload = self._post_market(
+            endpoint="day_bar",
+            body={
+                "node_id": canonical_id,
+                "start": _serialize_timestamp(start),
+                "end": _serialize_timestamp(end),
+                "limit": limit,
             },
             api_key=api_key,
         )

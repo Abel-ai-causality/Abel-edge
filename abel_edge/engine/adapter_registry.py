@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib
 from dataclasses import dataclass
 from pathlib import Path
@@ -21,6 +22,7 @@ from abel_edge.engine.feed_contract import (
     apply_max_data_date_guard,
     assert_frame_respects_max_data_date,
 )
+from abel_edge.engine.point_in_time_series import PointInTimeSeriesSpec
 
 ABEL_BAR_FIELDS = ["open", "high", "low", "close", "volume"]
 ABEL_BAR_CACHE_COLUMNS = ["timestamp", "symbol", *ABEL_BAR_FIELDS]
@@ -40,6 +42,7 @@ class FeedLoadRequest:
     options: dict[str, object]
     strategy_id: str | None
     feed_name: str
+    series_spec: PointInTimeSeriesSpec | None = None
 
 
 class DataFeedAdapter(Protocol):
@@ -105,6 +108,8 @@ class CSVDataFeedAdapter:
             source=f"feed '{request.feed_name}' adapter request",
         )
         path_value = request.options.get("path")
+        if request.series_spec is not None:
+            path_value = request.series_spec.source_request.get("path") or path_value
         if not path_value:
             raise AdapterRegistryError(
                 f"Feed '{request.feed_name}' uses adapter='csv' but is missing 'path'."
@@ -119,6 +124,10 @@ class CSVDataFeedAdapter:
             frame = _csv_series_frame(df, request)
             assert_frame_respects_max_data_date(frame, source=f"feed '{request.feed_name}'")
             return frame
+        if request.kind == "point_in_time_series":
+            df.attrs["source_receipt_sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+            df.attrs["series_spec_sha256"] = request.series_spec.sha256
+            return df
         raise AdapterRegistryError(
             f"Feed '{request.feed_name}' declares unsupported kind '{request.kind}'."
         )
@@ -128,15 +137,37 @@ class AbelDataFeedAdapter:
     assume_utc_for_naive = False
 
     def load(self, request: FeedLoadRequest) -> pd.DataFrame:
+        guarded_end = apply_max_data_date_guard(
+            request.end,
+            source=f"feed '{request.feed_name}' adapter request",
+        )
+        if request.kind == "point_in_time_series":
+            if request.series_spec is None:
+                raise AdapterRegistryError(
+                    f"Feed '{request.feed_name}' is missing its point-in-time series spec."
+                )
+            try:
+                canonical_module = importlib.import_module(
+                    "abel_edge.plugins.abel.canonical_node_data"
+                )
+            except ImportError as exc:
+                raise AdapterRegistryError(
+                    "Abel canonical-node data support is unavailable. "
+                    "See: abel_edge/plugins/AGENTS.md"
+                ) from exc
+            return canonical_module.load_canonical_node_series(
+                series_spec=request.series_spec,
+                start=request.start,
+                end=guarded_end,
+                limit=request.limit,
+                config=request.options,
+            )
+
         symbol = request.symbol
         if not symbol:
             raise AdapterRegistryError(
                 f"Feed '{request.feed_name}' uses adapter='abel' but is missing 'symbol'."
             )
-        guarded_end = apply_max_data_date_guard(
-            request.end,
-            source=f"feed '{request.feed_name}' adapter request",
-        )
         try:
             credentials_module = importlib.import_module("abel_edge.plugins.abel.credentials")
             prices_module = importlib.import_module("abel_edge.plugins.abel.prices")

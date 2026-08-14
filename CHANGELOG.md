@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+### Added
+- Added the generic `abel-edge.point-in-time-series/v1` auxiliary-feed
+  contract with distinct observation and availability times, canonical spec
+  hashing, explicit as-of versus native-only access, and adapter-registry
+  integration.
+- Added an optional Abel canonical-node compiler that resolves
+  `abel-edge.graph-node-spec/v1` into the generic point-in-time series contract
+  without moving graph selection semantics into Edge core.
+- Routed canonical graph-node point-in-time series through the built-in `abel`
+  adapter instead of introducing a separate `abel_graph_node` registry name.
+- Added receipt-checked live materialization for Abel market and catalog
+  canonical nodes, including family-aware routing, exchange verification, and
+  frozen weekday de-seasonalization parameters. Targets and canonical
+  close/volume nodes use the front-adjusted `symbols` mode; non-market nodes
+  use exact raw `node_id` mode and never fall back to a guessed symbol.
+
 ## [0.8.10] - 2026-06-29
 
 ### Changed
@@ -14,6 +30,11 @@
 - Removed the conservative daily validation profile and its profile-specific metrics.
 
 ### Fixed
+- Preserved exchange-qualified ticker symbols such as `.SS`, `.SZ`, `.HK`,
+  and `.TO` in Abel `day_bar` requests instead of parsing them as public graph
+  node field suffixes.
+- Applied canonical source-window bounds after event-time alignment and
+  availability lag so values visible beyond the frozen end date are excluded.
 - Compiled strategy paper catch-up now uses cursor-bounded windows so daily paper execution does not recompute from the wrong window.
 - Empty Abel bar payloads now normalize to a stable empty OHLCV frame shape instead of a columnless frame.
 

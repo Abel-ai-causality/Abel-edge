@@ -15,11 +15,12 @@ import numpy as np
 import pandas as pd
 
 from abel_edge.engine.decision_context import DecisionContext
-from abel_edge.engine.feed_contract import align_series_to_dates
+from abel_edge.engine.feed_contract import FeedAlignmentError, align_series_to_dates
 from abel_edge.engine.feed_loader import load_declared_feed, load_feed_frame
 from abel_edge.graph_nodes import coerce_graph_node_refs
 from abel_edge.engine.runtime_contract import (
     CompiledDecisionOutput,
+    DecisionContractError,
     DecisionDraft,
     ExecutionConstraints,
     RuntimeProfile,
@@ -203,6 +204,12 @@ class StrategyEngine(ABC):
             return compiled
 
         if self.uses_legacy_signal_contract():
+            native_only_feeds = self._native_only_point_in_time_feeds()
+            if native_only_feeds:
+                raise DecisionContractError(
+                    "native_only point-in-time feeds require compute_decisions(ctx); "
+                    f"legacy compute_signals() cannot consume {native_only_feeds}."
+                )
             profile = self.runtime_profile()
             positions, dates, prices = validate_signal_output(
                 *self.compute_signals(),
@@ -762,7 +769,14 @@ class StrategyEngine(ABC):
         frame = self._runtime_load_feed(name)
         feed_cfg = ((self.context or {}).get("_feeds") or {}).get(name) or {}
         kind = feed_cfg.get("kind")
-        if kind == "series":
+        if kind == "point_in_time_series" and align_to is not None:
+            materialization = (feed_cfg.get("series_spec") or {}).get("materialization") or {}
+            if materialization.get("alignment_policy") == "native_only":
+                raise FeedAlignmentError(
+                    f"Feed '{name}' declares alignment_policy='native_only'; "
+                    "feed_series(..., align_to=...) is not permitted."
+                )
+        if kind in {"series", "point_in_time_series"}:
             series = pd.Series(frame["value"].to_numpy(), index=pd.DatetimeIndex(frame["timestamp"]))
         else:
             if field not in frame.columns:
@@ -814,6 +828,18 @@ class StrategyEngine(ABC):
         if self._last_decision_context is None:
             return []
         return self._last_decision_context.trace_entries()
+
+    def _native_only_point_in_time_feeds(self) -> list[str]:
+        feeds = (self.context or {}).get("_feeds") or {}
+        return sorted(
+            str(name)
+            for name, feed in feeds.items()
+            if str(feed.get("kind") or "").strip().lower() == "point_in_time_series"
+            and ((feed.get("series_spec") or {}).get("materialization") or {}).get(
+                "alignment_policy"
+            )
+            == "native_only"
+        )
 
     def _assert_raw_strategy_access_allowed(self, method_name: str) -> None:
         if self._decision_surface_guard:
