@@ -95,6 +95,11 @@ declares a native-only feed fails before strategy execution.
 compiles `abel-edge.graph-node-spec/v1` into this generic contract and uses
 the built-in `abel` adapter by default.
 
+Graph selection and the CAP readiness gate are defined in
+[`graph-releases.md`](graph-releases.md). Consumers pass one graph release to
+Edge and never embed a decoder, transform parameters, or credentials in the
+point-in-time feed.
+
 The resolver preserves the canonical node ID, family, dataset, field or
 measure, key selectors, aggregation, transform parameters, release receipts,
 and event-time alignment. Edge core does not learn graph parent ranks or graph

@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import time
+from copy import deepcopy
 from typing import Any
 import uuid
 
@@ -113,6 +114,7 @@ class AbelClient:
     ) -> None:
         self.cap_base_url = (cap_base_url or resolve_cap_base_url(env_path=env_path)).rstrip("/")
         self.session = session or requests.Session()
+        self._last_cap_provenance: dict[str, Any] = {}
 
     def _post_json(self, *, url: str, payload: dict[str, Any], headers: dict[str, str]) -> dict[str, Any]:
         last_exc = None
@@ -139,21 +141,57 @@ class AbelClient:
             raise last_exc
         raise RuntimeError("Abel CAP request exhausted retries without a response.")
 
-    def discover_parents(self, *, node_id: str, limit: int, api_key: str) -> list[dict[str, Any]]:
+    def discover_parents(
+        self,
+        *,
+        node_id: str,
+        limit: int,
+        api_key: str,
+        graph_ref: dict[str, str] | None = None,
+    ) -> list[dict[str, Any]]:
         payload = self._post_cap(
             verb="traverse.parents",
-            params={"node_id": normalize_public_node_id(node_id), "top_k": min(limit, 20)},
+            params={
+                "node_id": _normalize_graph_node_id(node_id, graph_ref=graph_ref),
+                "top_k": min(limit, 20),
+            },
             api_key=api_key,
+            graph_ref=graph_ref,
         )
         return _extract_items(payload)
 
-    def markov_blanket(self, *, node_id: str, limit: int, api_key: str) -> list[dict[str, Any]]:
+    def markov_blanket(
+        self,
+        *,
+        node_id: str,
+        limit: int,
+        api_key: str,
+        graph_ref: dict[str, str] | None = None,
+    ) -> list[dict[str, Any]]:
         payload = self._post_cap(
             verb="graph.markov_blanket",
-            params={"node_id": normalize_public_node_id(node_id), "max_neighbors": min(limit, 20)},
+            params={
+                "node_id": _normalize_graph_node_id(node_id, graph_ref=graph_ref),
+                "max_neighbors": min(limit, 20),
+            },
             api_key=api_key,
+            graph_ref=graph_ref,
         )
         return _extract_items(payload)
+
+    def cap_methods(self, *, api_key: str) -> list[dict[str, Any]]:
+        payload = self._post_cap(
+            verb="meta.methods",
+            params={"detail": "full", "include_examples": False},
+            api_key=api_key,
+            graph_ref=None,
+        )
+        result = payload.get("result") or {}
+        methods = result.get("methods") if isinstance(result, dict) else []
+        return [item for item in (methods or []) if isinstance(item, dict)]
+
+    def graph_provenance(self) -> dict[str, Any]:
+        return deepcopy(self._last_cap_provenance)
 
     def fetch_bars(
         self,
@@ -215,7 +253,14 @@ class AbelClient:
             items = items.get("items") or items.get("bars") or []
         return items
 
-    def _post_cap(self, *, verb: str, params: dict[str, Any], api_key: str) -> dict[str, Any]:
+    def _post_cap(
+        self,
+        *,
+        verb: str,
+        params: dict[str, Any],
+        api_key: str,
+        graph_ref: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
         headers = {
             "Accept": "application/json",
             "Content-Type": "application/json",
@@ -223,7 +268,7 @@ class AbelClient:
             if api_key.lower().startswith("bearer ")
             else f"Bearer {api_key}",
         }
-        return self._post_json(
+        payload = self._post_json(
             url=f"{self.cap_base_url}/cap",
             payload={
                 "cap_version": CAP_VERSION,
@@ -235,10 +280,17 @@ class AbelClient:
                         "graph_id": DEFAULT_GRAPH_ID,
                         "graph_version": DEFAULT_GRAPH_VERSION,
                     }
+                    if graph_ref is None
+                    else deepcopy(graph_ref)
                 },
             },
             headers=headers,
         )
+        provenance = payload.get("provenance")
+        self._last_cap_provenance = (
+            deepcopy(provenance) if isinstance(provenance, dict) else {}
+        )
+        return payload
 
     def _post_market(self, *, endpoint: str, body: dict[str, Any], api_key: str) -> dict[str, Any]:
         headers = {
@@ -319,3 +371,16 @@ def _extract_items(payload: dict[str, Any]) -> list[dict[str, Any]]:
     if isinstance(result, list):
         return [item for item in result if isinstance(item, dict)]
     return []
+
+
+def _normalize_graph_node_id(
+    value: str,
+    *,
+    graph_ref: dict[str, str] | None,
+) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        raise ValueError("Ticker or node id cannot be empty.")
+    if str((graph_ref or {}).get("graph_version") or DEFAULT_GRAPH_VERSION) == "CausalNodeV4":
+        return raw
+    return normalize_public_node_id(raw)

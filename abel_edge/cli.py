@@ -326,7 +326,14 @@ def validate(strategy, verbose, csv_path, dsr_trials, export_path, config):
     help="Maximum nodes to return (hard cap 20)",
 )
 @click.option("--json", "json_output", is_flag=True, help="Emit structured JSON output")
-def discover(ticker, mode, limit, json_output):
+@click.option(
+    "--graph-release",
+    "graph_release_path",
+    default=None,
+    type=click.Path(exists=True, dir_okay=False),
+    help="JSON graph-release configuration; defaults to the legacy V3 release.",
+)
+def discover(ticker, mode, limit, json_output, graph_release_path):
     """Discover causal graph nodes for an asset via Abel API."""
     try:
         from abel_edge.plugins.abel.discover import (
@@ -337,13 +344,62 @@ def discover(ticker, mode, limit, json_output):
         raise click.ClickException("Abel plugin not installed. See: abel_edge/plugins/AGENTS.md")
     try:
         if json_output:
-            output = discover_graph_payload(ticker, mode=mode, limit=limit)
+            output = discover_graph_payload(
+                ticker,
+                mode=mode,
+                limit=limit,
+                graph_release=graph_release_path,
+            )
             click.echo(json.dumps(output, indent=2, sort_keys=True))
             return
-        output = discover_graph_nodes(ticker, mode=mode, limit=limit)
+        output = discover_graph_nodes(
+            ticker,
+            mode=mode,
+            limit=limit,
+            graph_release=graph_release_path,
+        )
     except Exception as e:
         raise click.ClickException(str(e))
     click.echo(output)
+
+
+@main.group("graph-release")
+def graph_release_group():
+    """Inspect caller-supplied Abel graph releases."""
+
+
+@graph_release_group.command("doctor")
+@click.option(
+    "--graph-release",
+    "graph_release_path",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False),
+)
+@click.option("--ticker", default="AAPL.price", show_default=True)
+@click.option("--env-path", default=".env", show_default=True)
+@click.option("--json", "json_output", is_flag=True, help="Emit structured JSON output")
+@click.pass_context
+def graph_release_doctor(ctx, graph_release_path, ticker, env_path, json_output):
+    """Fail closed unless CAP proves a graph release is reproducible."""
+    try:
+        from abel_edge.plugins.abel.graph_release import doctor_graph_release
+
+        payload = doctor_graph_release(
+            graph_release_path,
+            ticker=ticker,
+            env_path=env_path,
+        )
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+    if json_output:
+        click.echo(json.dumps(payload, indent=2, sort_keys=True))
+    else:
+        click.echo(f"status: {payload['status']}")
+        click.echo(payload["summary"])
+        for name in payload.get("blocked_checks", []):
+            click.echo(f"blocked: {name}")
+    if payload["status"] != "ready":
+        ctx.exit(1)
 
 
 @main.command()
