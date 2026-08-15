@@ -97,15 +97,6 @@ class GraphReleaseConfig:
                     "graph release receipt must be a lowercase SHA-256."
                 )
             payload["expected_release_receipt_sha256"] = receipt
-        if graph_ref["graph_version"] == "CausalNodeV4":
-            if not graph_ref.get("release_id"):
-                raise GraphReleaseContractError(
-                    "CausalNodeV4 graph release requires an exact release id."
-                )
-            if not receipt:
-                raise GraphReleaseContractError(
-                    "CausalNodeV4 graph release requires an expected release receipt."
-                )
         canonical = json.dumps(
             payload,
             ensure_ascii=False,
@@ -181,107 +172,19 @@ def doctor_graph_release(
     env_path: str = ".env",
     client: AbelClient | None = None,
 ) -> dict[str, Any]:
-    """Check that CAP exposes enough release facts for safe Edge consumption."""
+    """Check CAP graph identity, typed routing, and scalar-series usability."""
 
     release = resolve_graph_release(graph_release)
     api_key = require_api_key(env_path=env_path)
     abel = client or AbelClient(env_path=env_path)
-    methods = abel.cap_methods(api_key=api_key)
-    parents = abel.discover_parents(
-        node_id=ticker,
-        limit=20,
+    from abel_edge.plugins.abel.graph_release_doctor import assess_graph_release
+
+    return assess_graph_release(
+        release=release,
         api_key=api_key,
-        graph_ref=release.graph_ref,
+        client=abel,
+        ticker=ticker,
     )
-    provenance = abel.graph_provenance()
-    observed_version = str(provenance.get("graph_version") or "")
-    observed_release = str(provenance.get("release_id") or "")
-    observed_receipt = str(
-        provenance.get("release_receipt_sha256")
-        or provenance.get("release_sha256")
-        or ""
-    )
-    expected_ref = release.graph_ref
-    identity_reasons: list[str] = []
-    if observed_version != release.graph_version:
-        identity_reasons.append(
-            f"expected graph_version={release.graph_version}, observed={observed_version or '<missing>'}"
-        )
-    if release.is_canonical:
-        if observed_release != str(expected_ref["release_id"]):
-            identity_reasons.append(
-                f"expected release_id={expected_ref['release_id']}, "
-                f"observed={observed_release or '<missing>'}"
-            )
-        if observed_receipt != release.expected_release_receipt_sha256:
-            identity_reasons.append(
-                "expected release receipt was not reproduced by CAP"
-            )
-
-    descriptor_rows = [item for item in parents if _has_complete_descriptor(item)]
-    descriptor_ready = bool(parents) and len(descriptor_rows) == len(parents)
-    descriptor_methods = [
-        str(item.get("verb") or "")
-        for item in methods
-        if "node" in str(item.get("verb") or "").lower()
-        and any(
-            token in str(item).lower()
-            for token in ("series_spec", "node_spec", "transform", "availability")
-        )
-    ]
-    if not release.is_canonical:
-        descriptor_ready = True
-
-    checks = {
-        "config": {"status": "pass"},
-        "cap_methods": {
-            "status": "pass" if methods else "blocked",
-            "method_count": len(methods),
-            "descriptor_methods": descriptor_methods,
-        },
-        "discovery": {
-            "status": "pass" if parents else "blocked",
-            "parent_count": len(parents),
-        },
-        "release_identity": {
-            "status": "blocked" if identity_reasons else "pass",
-            "reasons": identity_reasons,
-            "observed": provenance,
-        },
-        "canonical_descriptor": {
-            "status": "pass" if descriptor_ready else "blocked",
-            "complete_parent_count": len(descriptor_rows),
-            "parent_count": len(parents),
-        },
-    }
-    blocked = [name for name, check in checks.items() if check["status"] != "pass"]
-    status = "blocked" if blocked else "ready"
-    summary = (
-        "CAP graph release is ready for Edge consumption."
-        if status == "ready"
-        else "CAP graph release is raw-only or identity-incomplete; canonical consumption is blocked."
-    )
-    return {
-        "contract": GRAPH_RELEASE_DOCTOR_CONTRACT,
-        "status": status,
-        "summary": summary,
-        "graph_release": release.payload,
-        "graph_release_sha256": release.sha256,
-        "ticker": ticker,
-        "checks": checks,
-        "blocked_checks": blocked,
-    }
-
-
-def _has_complete_descriptor(item: Mapping[str, Any]) -> bool:
-    node_spec = item.get("node_spec")
-    if not isinstance(node_spec, Mapping):
-        return False
-    required = {"contract", "node_id", "family", "source", "alignment", "transform"}
-    if not required.issubset(node_spec):
-        return False
-    source_receipt = str(item.get("source_receipt_sha256") or "")
-    return bool(_SHA256_RE.fullmatch(source_receipt))
 
 
 def _find_credential_path(value: Any, path: str = "") -> str | None:

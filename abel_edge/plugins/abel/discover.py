@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-import hashlib
 import inspect
-import json
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -16,6 +14,7 @@ from abel_edge.plugins.abel.graph_release import (
     GraphReleaseConfig,
     resolve_graph_release,
 )
+from abel_edge.plugins.abel.graph_driver import classify_v4_driver
 
 
 def discover_graph_nodes(
@@ -138,6 +137,16 @@ def _render_parents(items: list[dict[str, Any]]) -> str:
         ticker = str(item.get("ticker", "")).strip()
         field = str(item.get("field", "")).strip()
         if not ticker or not field:
+            driver_ref = item.get("driver_ref")
+            node_id = str(item.get("node_id") or "").strip()
+            if (
+                isinstance(driver_ref, Mapping)
+                and driver_ref.get("kind") == "canonical_node"
+                and node_id
+            ):
+                lines.append(f"  - node_id: {node_id}")
+                lines.append("    kind: canonical_node")
+                lines.append(f"    family: {item.get('family', 'canonical_node')}")
             continue
         lines.append(f"  - ticker: {ticker}")
         lines.append(f"    field: {field}")
@@ -282,45 +291,14 @@ def _normalize_items(
         if not node_id:
             continue
         if release.is_canonical:
-            node_spec = item.get("node_spec")
-            family = str(
-                item.get("family")
-                or item.get("node_family")
-                or (node_spec or {}).get("family")
-                or ""
-            ).strip()
-            spec_sha = str(item.get("node_spec_sha256") or "").strip()
-            if not spec_sha and isinstance(node_spec, Mapping):
-                spec_sha = hashlib.sha256(
-                    json.dumps(
-                        node_spec,
-                        ensure_ascii=False,
-                        sort_keys=True,
-                        separators=(",", ":"),
-                    ).encode("utf-8")
-                ).hexdigest()
             source_rank = item.get("source_rank", index)
-            normalized.append(
-                {
-                    "node_id": node_id,
-                    "family": family,
-                    "source_rank": int(source_rank),
-                    "node_spec_sha256": spec_sha,
-                    "roles": _pick_roles(item),
-                    "driver_ref": {
-                        "kind": "canonical_node",
-                        "node_id": node_id,
-                        "family": family,
-                        "node_spec_sha256": spec_sha,
-                    },
-                    **({"node_spec": dict(node_spec)} if isinstance(node_spec, Mapping) else {}),
-                    **(
-                        {"source_receipt_sha256": item["source_receipt_sha256"]}
-                        if item.get("source_receipt_sha256")
-                        else {}
-                    ),
-                }
+            routed = classify_v4_driver(
+                item,
+                node_id=node_id,
+                source_rank=int(source_rank),
             )
+            routed["roles"] = _pick_roles(item)
+            normalized.append(routed)
             continue
         ticker, field = split_public_node_id(node_id)
         normalized.append(

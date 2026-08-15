@@ -76,11 +76,12 @@ Notes:
 - the canonical ID is opaque and is sent byte-for-byte; public ticker aliases
   and symbol normalization do not apply
 - the response is raw even when the node represents close or volume
-- canonical materialization uses this mode for non-market families, then
-  applies the frozen graph-release transform in Edge
+- only non-market families use this mode; close/volume graph parents are
+  deliberately rerouted before retrieval
 - canonical close/volume nodes use symbol mode so A-share and Hong Kong
   corporate-action adjustment matches the market-data contract
 - a missing node is an error; Edge does not retry it through `symbols`
+- cursor pagination uses `cursor_id` from the response `page.max_id`
 
 ## Response Shape
 
@@ -109,17 +110,27 @@ Also accepted by the current adapter:
 
 Each returned row should represent one daily bar.
 
-Node mode accepts the same response envelopes. Its normalized row shape is:
+Current node mode returns source records rather than normalized scalar rows:
 
 ```json
 {
-  "timestamp": "2026-01-02T00:00:00Z",
-  "node_id": "<exact registered CausalNodeV4 id>",
-  "value": 1.25
+  "mode": "node_records",
+  "node": {
+    "node_id": "<exact registered CausalNodeV4 id>",
+    "source_table": "<source table>",
+    "feature": "<value column>"
+  },
+  "data": [
+    {"id": 101, "date": "2026-01-02", "<value column>": 1.25}
+  ],
+  "page": {"limit": 100, "max_id": 101, "has_more": true}
 }
 ```
 
-A returned `node_id`, when present, must equal the requested ID.
+The descriptor `node.node_id` must equal the requested ID. Edge retains the
+descriptor and cursor metadata at the client boundary. It does not accept a
+record set as a scalar point-in-time series until each row has a finite feature
+value and UTC event time and those event times are unique.
 
 ## Runtime Expectations
 
@@ -143,8 +154,10 @@ Runtime rules:
 - rows must be sortable by `symbol, timestamp`
 - `(symbol, timestamp)` should be unique
 
-Canonical node rows must have a unique UTC day. Their release-specific
-alignment, transform, and availability lag are applied after retrieval.
+Canonical node rows must have a unique UTC event time. If a source has multiple
+records on one date, CAP must disclose and apply the canonical node's key/filter
+and aggregation, or return the already aggregated node-native series. Edge does
+not choose sum, mean, or last-row semantics on the consumer's behalf.
 
 ## Why This Contract
 

@@ -15,6 +15,8 @@ import uuid
 import requests
 
 from abel_edge.plugins.abel.credentials import resolve_cap_base_url
+from abel_edge.plugins.abel.graph_driver import normalize_graph_query_node_id
+from abel_edge.plugins.abel import node_records_client
 
 CAP_VERSION = "0.2.2"
 DEFAULT_GRAPH_ID = "abel-main"
@@ -64,9 +66,7 @@ def split_public_node_id(node_id: str) -> tuple[str, str]:
 def _serialize_timestamp(value):
     if value is None:
         return None
-    if hasattr(value, "isoformat"):
-        return value.isoformat()
-    return str(value)
+    return value.isoformat() if hasattr(value, "isoformat") else str(value)
 
 
 def _normalize_market_fields(fields: list[str] | None) -> list[str]:
@@ -235,23 +235,36 @@ class AbelClient:
     ) -> Any:
         """Fetch one unadjusted canonical-node series by its exact V4 id."""
 
-        canonical_id = str(node_id or "").strip()
-        if not canonical_id:
-            raise ValueError("Canonical node_id cannot be empty.")
-        payload = self._post_market(
-            endpoint="day_bar",
-            body={
-                "node_id": canonical_id,
-                "start": _serialize_timestamp(start),
-                "end": _serialize_timestamp(end),
-                "limit": limit,
-            },
+        return node_records_client.fetch_all_node_records(
+            fetch_page=self.fetch_node_records_page,
+            node_id=node_id,
+            start=start,
+            end=end,
+            limit=limit,
             api_key=api_key,
         )
-        items = payload.get("data") or payload.get("result") or []
-        if isinstance(items, dict):
-            items = items.get("items") or items.get("bars") or []
-        return items
+
+    def fetch_node_records_page(
+        self,
+        *,
+        node_id: str,
+        start: str | None,
+        end: str | None,
+        limit: int | None,
+        cursor_id: int | None,
+        api_key: str,
+    ) -> dict[str, Any]:
+        """Fetch one exact page and preserve CAP node metadata and cursor facts."""
+
+        return node_records_client.fetch_node_records_page(
+            post_market=self._post_market,
+            node_id=node_id,
+            start=start,
+            end=end,
+            limit=limit,
+            cursor_id=cursor_id,
+            api_key=api_key,
+        )
 
     def _post_cap(
         self,
@@ -378,9 +391,10 @@ def _normalize_graph_node_id(
     *,
     graph_ref: dict[str, str] | None,
 ) -> str:
-    raw = str(value or "").strip()
-    if not raw:
-        raise ValueError("Ticker or node id cannot be empty.")
-    if str((graph_ref or {}).get("graph_version") or DEFAULT_GRAPH_VERSION) == "CausalNodeV4":
-        return raw
-    return normalize_public_node_id(raw)
+    return normalize_graph_query_node_id(
+        value,
+        graph_version=str(
+            (graph_ref or {}).get("graph_version") or DEFAULT_GRAPH_VERSION
+        ),
+        legacy_normalizer=normalize_public_node_id,
+    )

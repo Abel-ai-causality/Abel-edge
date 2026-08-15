@@ -100,10 +100,9 @@ Graph selection and the CAP readiness gate are defined in
 Edge and never embed a decoder, transform parameters, or credentials in the
 point-in-time feed.
 
-The resolver preserves the canonical node ID, family, dataset, field or
-measure, key selectors, aggregation, transform parameters, release receipts,
-and event-time alignment. Edge core does not learn graph parent ranks or graph
-selection policy.
+The point-in-time contract preserves whatever source, transform, receipt, and
+event-time facts its series spec actually contains. Edge core does not learn
+graph parent ranks or graph selection policy.
 
 Canonical nodes are an Abel source capability, not a separately registered
 adapter. `AbelDataFeedAdapter` dispatches `kind: point_in_time_series` to the
@@ -111,17 +110,22 @@ canonical materializer while continuing to serve ticker `bars` and legacy
 `series` requests through the same `abel` registry name. Do not declare or
 register an `abel_graph_node` adapter.
 
-The canonical materializer supports market close/volume nodes and catalog
-nodes. Target history and canonical close/volume nodes use the front-adjusted
-`symbols` mode of Abel `day_bar`; non-market canonical nodes use its exact raw
-`node_id` mode. The materializer dispatches these paths by canonical family,
-never by guessing a ticker from the node ID. A failed non-market node request
-never falls back to symbol mode.
+For current CAP V4 discovery, target history and graph nodes named `.price`,
+`.volume`, `_close`, or `_volume` use the front-adjusted `symbols` mode of Abel
+`day_bar`. Other graph nodes use their exact raw `node_id`. A failed non-market
+node request never falls back to symbol mode.
 
-It verifies the frozen raw-data receipt and, for market families, the exchange
-reference receipt before Edge normalizes visibility time. A catalog schema
-receipt remains part of the frozen node/spec identity, while the online node
-registry owns dataset/key resolution for the raw series request.
+The current `node_id` response is a paginated raw-record surface. It is not
+automatically a valid scalar point-in-time feed: duplicate event times and
+ambiguous node-specific key/filter/aggregation semantics fail closed. The
+older explicit frozen-node compiler remains available for callers that truly
+possess a complete `abel-edge.graph-node-spec/v1`; Edge does not synthesize
+that spec from the current CAP response or an unrelated S3 package.
+
+An explicit frozen-node spec verifies its frozen raw-data receipt and, for
+market families, its exchange reference receipt before Edge normalizes
+visibility time. A catalog schema receipt remains part of that frozen
+node/spec identity.
 The materialization request must provide explicit source start and end dates,
 either through the runtime window or feed options, because a source receipt is
 meaningless without a bounded row set.
