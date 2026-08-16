@@ -91,9 +91,10 @@ declares a native-only feed fails before strategy execution.
 
 ## Canonical Graph Nodes
 
-`abel_edge.plugins.abel.canonical_node.compile_canonical_node_series_spec`
-compiles `abel-edge.graph-node-spec/v1` into this generic contract and uses
-the built-in `abel` adapter by default.
+`abel_edge.plugins.abel.compile_cap_node_series_spec` compiles CAP's minimal
+exact-node scalar shape into this generic contract. The older
+`compile_canonical_node_series_spec` remains available for a caller that
+already owns a complete frozen `abel-edge.graph-node-spec/v1`.
 
 Graph selection and the CAP readiness gate are defined in
 [`graph-releases.md`](graph-releases.md). Consumers pass one graph release to
@@ -112,15 +113,16 @@ register an `abel_graph_node` adapter.
 
 For current CAP V4 discovery, target history and graph nodes named `.price`,
 `.volume`, `_close`, or `_volume` use the front-adjusted `symbols` mode of Abel
-`day_bar`. Other graph nodes use their exact raw `node_id`. A failed non-market
-node request never falls back to symbol mode.
+`day_bar`. Other graph nodes use their exact `node_id` with `shape=series`.
+A failed non-market node request never falls back to symbol mode.
 
-The current `node_id` response is a paginated raw-record surface. It is not
-automatically a valid scalar point-in-time feed: duplicate event times and
-ambiguous node-specific key/filter/aggregation semantics fail closed. The
-older explicit frozen-node compiler remains available for callers that truly
-possess a complete `abel-edge.graph-node-spec/v1`; Edge does not synthesize
-that spec from the current CAP response or an unrelated S3 package.
+The minimal CAP scalar spec uses explicit UTC availability and `asof` access.
+CAP owns exact-node filtering and aggregation; Edge requires
+`mode=node_series`, exact identity, finite values, unique visibility timestamps,
+and advancing pagination. A raw `mode=node_records` response fails closed.
+`prepare_cap_node_series_spec` probes a bounded live window and freezes the
+normalized response receipt. Edge does not synthesize internal CAP rules from
+an unrelated S3 package.
 
 An explicit frozen-node spec verifies its frozen raw-data receipt and, for
 market families, its exchange reference receipt before Edge normalizes

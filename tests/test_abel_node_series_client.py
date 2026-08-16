@@ -54,6 +54,8 @@ def test_fetch_node_series_uses_exact_single_node_id_mode():
             )
             return StubResponse(
                 {
+                    "mode": "node_series",
+                    "node": {"node_id": "v4::catalog::demo"},
                     "data": [
                         {
                             "timestamp": "2026-05-01T00:00:00Z",
@@ -93,6 +95,7 @@ def test_fetch_node_series_uses_exact_single_node_id_mode():
         "start": "2026-05-01",
         "end": "2026-05-10",
         "limit": 20,
+        "shape": "series",
     }
     assert "symbols" not in session.calls[0]["json"]
     assert "fields" not in session.calls[0]["json"]
@@ -156,12 +159,24 @@ def test_fetch_node_series_follows_cursor_pages_without_losing_rows():
             self.bodies.append(json)
             if len(self.bodies) == 1:
                 return StubResponse(
-                    data=[{"id": 1, "date": "2026-05-01", "value": 1.0}],
+                    data=[
+                        {
+                            "id": 1,
+                            "timestamp": "2026-05-01T00:00:00Z",
+                            "value": 1.0,
+                        }
+                    ],
                     max_id=1,
                     has_more=True,
                 )
             return StubResponse(
-                data=[{"id": 2, "date": "2026-05-02", "value": 2.0}],
+                data=[
+                    {
+                        "id": 2,
+                        "timestamp": "2026-05-02T00:00:00Z",
+                        "value": 2.0,
+                    }
+                ],
                 max_id=2,
                 has_more=False,
             )
@@ -180,7 +195,7 @@ def test_fetch_node_series_follows_cursor_pages_without_losing_rows():
 
         def json(self):
             return {
-                "mode": "node_records",
+                "mode": "node_series",
                 "node": {"node_id": "catalog:test#1", "feature": "value"},
                 "data": self.data,
                 "page": {
@@ -206,6 +221,7 @@ def test_fetch_node_series_follows_cursor_pages_without_losing_rows():
             "start": "2026-05-01",
             "end": "2026-05-10",
             "limit": 2,
+            "shape": "series",
         },
         {
             "node_id": "catalog:test#1",
@@ -213,8 +229,91 @@ def test_fetch_node_series_follows_cursor_pages_without_losing_rows():
             "end": "2026-05-10",
             "limit": 1,
             "cursor_id": 1,
+            "shape": "series",
         },
     ]
+
+
+def test_fetch_node_series_rejects_raw_record_shape():
+    class StubSession:
+        def post(self, _url, *, json=None, headers=None, timeout=None):
+            return StubResponse()
+
+    class StubResponse:
+        status_code = 200
+        headers = {}
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "mode": "node_records",
+                "node": {
+                    "node_id": "health.openfda.drug.events:event_count#96bc3e82",
+                    "feature": "event_count",
+                },
+                "data": [
+                    {"id": 1, "date": "2026-05-01", "event_count": 19},
+                    {"id": 2, "date": "2026-05-01", "event_count": 1},
+                ],
+                "page": {"has_more": False, "max_id": 2},
+            }
+
+    with pytest.raises(ValueError, match="scalar series"):
+        AbelClient(session=StubSession()).fetch_node_series(
+            node_id="health.openfda.drug.events:event_count#96bc3e82",
+            start="2026-05-01",
+            end="2026-05-10",
+            limit=20,
+            api_key="abel_test",
+        )
+
+
+def test_fetch_node_series_rejects_duplicate_utc_timestamps_across_pages():
+    class StubSession:
+        def __init__(self):
+            self.calls = 0
+
+        def post(self, _url, *, json=None, headers=None, timeout=None):
+            self.calls += 1
+            return StubResponse(cursor=self.calls, has_more=self.calls == 1)
+
+    class StubResponse:
+        status_code = 200
+        headers = {}
+
+        def __init__(self, *, cursor, has_more):
+            self.cursor = cursor
+            self.has_more = has_more
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "mode": "node_series",
+                "node": {"node_id": "catalog:test#1"},
+                "data": [
+                    {
+                        "timestamp": "2026-05-01T00:00:00Z",
+                        "value": float(self.cursor),
+                    }
+                ],
+                "page": {
+                    "has_more": self.has_more,
+                    "max_id": self.cursor,
+                },
+            }
+
+    with pytest.raises(ValueError, match="duplicate UTC timestamp"):
+        AbelClient(session=StubSession()).fetch_node_series(
+            node_id="catalog:test#1",
+            start="2026-05-01",
+            end="2026-05-10",
+            limit=2,
+            api_key="abel_test",
+        )
 
 
 def test_fetch_bars_never_sends_node_id_mode_fields():
@@ -285,5 +384,6 @@ def test_fetch_node_series_does_not_fallback_to_symbol_mode_on_404():
             "start": "2026-05-01",
             "end": "2026-05-10",
             "limit": 20,
+            "shape": "series",
         }
     ]

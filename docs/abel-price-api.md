@@ -31,7 +31,7 @@ the other after a failed request.
 | Mode | Identity | Intended use | Price adjustment |
 | --- | --- | --- | --- |
 | market bars | `symbols` | targets, ordinary OHLCV, and canonical close/volume nodes | provider front-adjusted market history |
-| graph node | one exact `node_id` | canonical non-market V4 graph parents | raw source values |
+| graph node | one exact `node_id` plus `shape=series` | canonical non-market V4 graph parents | node-native scalar values, no price adjustment |
 
 Both modes use UTC timestamps. The request must contain exactly one of
 `symbols` or `node_id`; `node_ids` batching is not part of this interface.
@@ -66,6 +66,7 @@ Notes:
 ```json
 {
   "node_id": "<exact registered CausalNodeV4 id>",
+  "shape": "series",
   "start": "2023-01-01T00:00:00Z",
   "end": null,
   "limit": 600
@@ -75,7 +76,8 @@ Notes:
 Notes:
 - the canonical ID is opaque and is sent byte-for-byte; public ticker aliases
   and symbol normalization do not apply
-- the response is raw even when the node represents close or volume
+- CAP resolves the exact node internally and returns its scalar series; Edge
+  does not receive or reproduce the node's selector or aggregation
 - only non-market families use this mode; close/volume graph parents are
   deliberately rerouted before retrieval
 - canonical close/volume nodes use symbol mode so A-share and Hong Kong
@@ -110,27 +112,30 @@ Also accepted by the current adapter:
 
 Each returned row should represent one daily bar.
 
-Current node mode returns source records rather than normalized scalar rows:
+The scalar node response is:
 
 ```json
 {
-  "mode": "node_records",
+  "mode": "node_series",
   "node": {
     "node_id": "<exact registered CausalNodeV4 id>",
-    "source_table": "<source table>",
     "feature": "<value column>"
   },
   "data": [
-    {"id": 101, "date": "2026-01-02", "<value column>": 1.25}
+    {
+      "timestamp": "2026-01-02T00:00:00Z",
+      "event_time": "2026-01-01T00:00:00Z",
+      "value": 1.25
+    }
   ],
   "page": {"limit": 100, "max_id": 101, "has_more": true}
 }
 ```
 
-The descriptor `node.node_id` must equal the requested ID. Edge retains the
-descriptor and cursor metadata at the client boundary. It does not accept a
-record set as a scalar point-in-time series until each row has a finite feature
-value and UTC event time and those event times are unique.
+The descriptor `node.node_id` must equal the requested ID. `timestamp` is the
+earliest UTC visibility time; `event_time` is optional and defaults to that
+timestamp. Edge rejects raw `mode=node_records`, non-finite values, duplicate
+timestamps, non-UTC timestamps, identity drift, and stalled cursors.
 
 ## Runtime Expectations
 
@@ -154,10 +159,9 @@ Runtime rules:
 - rows must be sortable by `symbol, timestamp`
 - `(symbol, timestamp)` should be unique
 
-Canonical node rows must have a unique UTC event time. If a source has multiple
-records on one date, CAP must disclose and apply the canonical node's key/filter
-and aggregation, or return the already aggregated node-native series. Edge does
-not choose sum, mean, or last-row semantics on the consumer's behalf.
+Canonical node rows must have a unique UTC visibility timestamp. CAP applies
+the canonical node's key/filter and aggregation inside its V4 registry. Edge
+does not choose sum, mean, or last-row semantics on the consumer's behalf.
 
 ## Why This Contract
 

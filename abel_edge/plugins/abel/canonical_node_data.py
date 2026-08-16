@@ -12,7 +12,6 @@ import requests
 
 from abel_edge.engine.point_in_time_series import PointInTimeSeriesSpec
 from abel_edge.plugins.abel._canonical_node_values import (
-    CanonicalValueError,
     align_market_day,
     digest,
     finite_float,
@@ -21,14 +20,18 @@ from abel_edge.plugins.abel._canonical_node_values import (
     series_receipt,
 )
 from abel_edge.plugins.abel.credentials import require_api_key
-from abel_edge.plugins.abel.canonical_node import MARKET_NODE_FAMILY_FIELDS
+from abel_edge.plugins.abel.canonical_node import (
+    MARKET_NODE_FAMILY_FIELDS,
+)
+from abel_edge.plugins.abel.cap_node_series import (
+    CanonicalNodeDataError,
+    cap_node_series_receipt as cap_node_series_receipt,
+    materialize_cap_node_series as _materialize_cap_node_series,
+    prepare_cap_node_series_spec as prepare_cap_node_series_spec,
+)
 from abel_edge.plugins.abel.prices import fetch_bars, fetch_node_series
 
 DEFAULT_DATA_BASE_URL = "https://cap.abel.ai/data-infra"
-
-
-class CanonicalNodeDataError(CanonicalValueError):
-    """Raised when a frozen canonical node cannot be reproduced."""
 
 
 def load_canonical_node_series(
@@ -48,17 +51,28 @@ def load_canonical_node_series(
         )
     request = payload["source"]["request"]
     node_id = str(request["node_id"])
-    family = str(request["family"])
     retrieval_mode = str(request.get("retrieval_mode") or "")
-    source = request["source"]
-    alignment = request["alignment"]
-    transform = payload["transforms"][0]["parameters"]
     resolved_start = start or (config or {}).get("source_start")
     resolved_end = end or (config or {}).get("source_end")
     if resolved_start is None or resolved_end is None:
         raise CanonicalNodeDataError(
             "Frozen canonical source receipts require explicit start and end dates."
         )
+
+    if retrieval_mode == "node_series":
+        return _materialize_cap_node_series(
+            series_spec=series_spec,
+            node_id=node_id,
+            start=resolved_start,
+            end=resolved_end,
+            limit=limit,
+            config=config or {},
+        )
+
+    family = str(request["family"])
+    source = request["source"]
+    alignment = request["alignment"]
+    transform = payload["transforms"][0]["parameters"]
 
     expected_mode = (
         "symbol" if family in MARKET_NODE_FAMILY_FIELDS else "node_id"

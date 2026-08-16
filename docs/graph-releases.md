@@ -59,7 +59,8 @@ references. V4 preserves the original graph node ID and dispatches it as:
 - `.price`, `.volume`, `_close`, or `_volume`: typed `symbol` reference with
   `close` or `volume`, routed through provider-adjusted market data.
 - every other node: typed `canonical_node` reference routed byte-for-byte
-  through `node_id`, with raw UTC record semantics and no price adjustment.
+  through `node_id`, requesting CAP's UTC scalar-series shape with no price
+  adjustment.
 
 Each typed reference has a canonical `driver_ref_sha256`. It is a routing
 identity, not a transform or source-data receipt.
@@ -68,8 +69,9 @@ identity, not a transform or source-data receipt.
 
 Edge does not load an old S3 graph package, route price/volume graph nodes via
 raw `node_id`, guess a symbol for other families, or silently aggregate raw
-records. The generic Edge point-in-time contract requires one finite scalar
-per visibility timestamp. If a `node_id` response has duplicate UTC event
-times, different node IDs resolve to identical records, or the node-specific
-key/filter/aggregation is not reproducible, the doctor reports `blocked` and
-downstream integration must stop.
+records. It sends `shape=series` for an exact non-market node and requires
+`mode=node_series`, the same response node ID, one finite value per UTC
+timestamp, and an advancing cursor. CAP owns the registry lookup and any
+internal filtering or aggregation. A `node_records` response means the scalar
+shape is unavailable; the doctor reports `blocked` and downstream integration
+must stop.

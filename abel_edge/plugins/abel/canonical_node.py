@@ -20,6 +20,56 @@ MARKET_NODE_FAMILY_FIELDS = {
 }
 
 
+def compile_cap_node_series_spec(
+    *,
+    node_id: str,
+    graph_ref: Mapping[str, Any],
+    source_receipt_sha256: str,
+    source_adapter: str = "abel",
+) -> PointInTimeSeriesSpec:
+    """Compile CAP's exact-node scalar shape without graph-transform metadata."""
+
+    canonical_id = str(node_id or "").strip()
+    if not canonical_id:
+        raise PointInTimeSeriesContractError("CAP node_id must be non-empty.")
+    frozen_graph_ref = {
+        "graph_id": str(graph_ref.get("graph_id") or "").strip(),
+        "graph_version": str(graph_ref.get("graph_version") or "").strip(),
+    }
+    if not all(frozen_graph_ref.values()):
+        raise PointInTimeSeriesContractError(
+            "CAP node series requires graph_id and graph_version."
+        )
+    return PointInTimeSeriesSpec.from_mapping(
+        {
+            "contract": "abel-edge.point-in-time-series/v1",
+            "series_id": canonical_id,
+            "source": {
+                "adapter": source_adapter,
+                "request": {
+                    "node_id": canonical_id,
+                    "retrieval_mode": "node_series",
+                    "graph_ref": frozen_graph_ref,
+                },
+            },
+            "schema": {
+                "event_time_field": "event_time",
+                "available_at_field": "timestamp",
+                "value_field": "value",
+            },
+            "materialization": {
+                "frequency": "irregular",
+                "timezone": "UTC",
+                "missing_policy": "none",
+                "alignment_policy": "asof",
+            },
+            "transforms": [],
+            "availability": {"mode": "explicit"},
+            "provenance": {"source_receipt_sha256": source_receipt_sha256},
+        }
+    )
+
+
 def compile_canonical_node_series_spec(
     node_spec: Mapping[str, Any],
     *,

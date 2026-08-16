@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 import math
-from collections import defaultdict
+from datetime import datetime, timezone
 from typing import Any
 
 from abel_edge.plugins.abel.graph_driver import classify_v4_driver
@@ -142,14 +140,13 @@ def _probe_market_routes(routed, *, client, api_key: str) -> list[str]:
 def _probe_node_routes(routed, *, client, api_key: str) -> tuple[list[str], list[dict[str, Any]]]:
     reasons = []
     details = []
-    fingerprints: dict[tuple[str, str, str], list[str]] = defaultdict(list)
     for item in routed:
         ref = item["driver_ref"]
         if ref["kind"] != "canonical_node":
             continue
         node_id = ref["node_id"]
         try:
-            payload = client.fetch_node_records_page(
+            payload = client.fetch_node_series_page(
                 node_id=node_id,
                 start=PROBE_START,
                 end=PROBE_END,
@@ -160,42 +157,41 @@ def _probe_node_routes(routed, *, client, api_key: str) -> tuple[list[str], list
         except Exception as exc:
             reasons.append(f"{node_id}: node_id route failed: {exc}")
             continue
-        node = payload.get("node") if isinstance(payload, dict) else None
+        if not isinstance(payload, dict) or payload.get("mode") != "node_series":
+            observed = payload.get("mode") if isinstance(payload, dict) else None
+            reasons.append(
+                f"{node_id}: response is not scalar-series mode "
+                f"(observed {observed or '<missing>'})"
+            )
+            continue
+        node = payload.get("node")
         rows = payload.get("data") if isinstance(payload, dict) else None
         if not isinstance(node, dict) or str(node.get("node_id") or "") != node_id:
             reasons.append(f"{node_id}: response did not preserve the exact node identity")
             continue
-        feature = str(node.get("feature") or "").strip()
-        source_table = str(node.get("source_table") or "").strip()
-        if not feature or not source_table or not isinstance(rows, list):
-            reasons.append(f"{node_id}: response is missing source_table, feature, or data")
+        feature = str(node.get("feature") or "value").strip()
+        if not isinstance(rows, list):
+            reasons.append(f"{node_id}: scalar-series response is missing data")
             continue
         times = [_event_time(row) for row in rows]
         usable = [time for time in times if time]
         duplicate_count = len(usable) - len(set(usable))
-        finite_count = sum(_finite(row.get(feature)) for row in rows if isinstance(row, dict))
+        finite_count = sum(_finite(row.get("value")) for row in rows if isinstance(row, dict))
         details.append(
             {
                 "node_id": node_id,
-                "source_table": source_table,
                 "feature": feature,
                 "row_count": len(rows),
                 "finite_value_count": finite_count,
                 "duplicate_event_time_count": duplicate_count,
             }
         )
-        if not rows or finite_count == 0 or len(usable) != len(rows):
-            reasons.append(f"{node_id}: raw records do not contain a finite value and UTC event time per row")
-        if duplicate_count:
-            reasons.append(f"{node_id}: duplicate UTC event time requires an undisclosed key/filter or aggregation")
-        fingerprint = _rows_fingerprint(rows)
-        fingerprints[(source_table, feature, fingerprint)].append(node_id)
-    for (_table, _feature, _fingerprint), node_ids in fingerprints.items():
-        if len(node_ids) > 1:
+        if not rows or finite_count != len(rows) or len(usable) != len(rows):
             reasons.append(
-                "distinct canonical node IDs returned identical raw records: "
-                + ", ".join(node_ids)
+                f"{node_id}: scalar series requires a finite value and UTC timestamp per row"
             )
+        if duplicate_count:
+            reasons.append(f"{node_id}: duplicate UTC timestamp in scalar series")
     return reasons, details
 
 
@@ -221,7 +217,16 @@ def _has_finite_market_row(rows: Any, field: str) -> bool:
 def _event_time(row: Any) -> str:
     if not isinstance(row, dict):
         return ""
-    return str(row.get("timestamp") or row.get("event_time") or row.get("date") or "").strip()
+    text = str(row.get("timestamp") or "").strip()
+    if not text:
+        return ""
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return ""
+    if parsed.tzinfo is None or parsed.utcoffset() != timezone.utc.utcoffset(parsed):
+        return ""
+    return parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def _finite(value: Any) -> bool:
@@ -229,8 +234,3 @@ def _finite(value: Any) -> bool:
         return math.isfinite(float(value))
     except (TypeError, ValueError):
         return False
-
-
-def _rows_fingerprint(rows: list[dict[str, Any]]) -> str:
-    canonical = json.dumps(rows, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()

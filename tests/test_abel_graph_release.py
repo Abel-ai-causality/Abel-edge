@@ -232,7 +232,7 @@ def test_v4_discovery_preserves_arbitrary_node_identity(monkeypatch):
         "retrieval_mode": "node_id",
         "adjustment": "none",
         "timezone": "UTC",
-        "series_semantics": "raw_records",
+        "series_semantics": "point_in_time_scalar",
     }
     assert payload["parents"][0]["source_rank"] == 7
     rendered = discover_module.render_discovery_payload(payload, mode="parents")
@@ -270,7 +270,7 @@ def test_graph_release_doctor_blocks_non_scalar_raw_node_records(monkeypatch, tm
                 }
             ]
 
-        def fetch_node_records_page(self, *, node_id, start, end, limit, cursor_id, api_key):
+        def fetch_node_series_page(self, *, node_id, start, end, limit, cursor_id, api_key):
             return {
                 "mode": "node_records",
                 "node": {
@@ -308,5 +308,68 @@ def test_graph_release_doctor_blocks_non_scalar_raw_node_records(monkeypatch, tm
     assert payload["checks"]["release_identity"]["status"] == "pass"
     assert payload["checks"]["market_symbol_routes"]["status"] == "pass"
     assert payload["checks"]["node_id_scalar_series"]["status"] == "blocked"
-    assert "duplicate UTC event time" in payload["checks"]["node_id_scalar_series"]["reasons"][0]
+    assert "not scalar-series mode" in payload["checks"]["node_id_scalar_series"]["reasons"][0]
     assert "scalar-series" in payload["summary"]
+
+
+def test_graph_release_doctor_accepts_exact_scalar_node_series(monkeypatch, tmp_path):
+    from abel_edge.plugins.abel import graph_release as release_module
+
+    config_path = tmp_path / "v4.json"
+    config_path.write_text(json.dumps(_v4_release()), encoding="utf-8")
+
+    class StubClient:
+        def cap_methods(self, *, api_key):
+            return [{"verb": "traverse.parents"}]
+
+        def discover_parents(self, *, node_id, limit, api_key, graph_ref):
+            return [
+                {"node_id": "JWWCX.price"},
+                {"node_id": "000001.SZ.volume"},
+                {"node_id": "health.openfda.drug.events:event_count#96bc3e82"},
+            ]
+
+        def graph_provenance(self):
+            return {"graph_version": "CausalNodeV4"}
+
+        def fetch_bars(self, *, symbols, start, end, timeframe, limit, fields, api_key):
+            return [
+                {
+                    "timestamp": "2026-05-01T00:00:00Z",
+                    "symbol": symbols[0],
+                    fields[0]: 10.0,
+                }
+            ]
+
+        def fetch_node_series_page(self, *, node_id, start, end, limit, cursor_id, api_key):
+            return {
+                "mode": "node_series",
+                "node": {"node_id": node_id, "feature": "event_count"},
+                "data": [
+                    {"timestamp": "2026-05-01T00:00:00Z", "value": 21.0},
+                    {"timestamp": "2026-05-02T00:00:00Z", "value": 25.0},
+                ],
+                "page": {"limit": 100, "max_id": 2, "has_more": False},
+            }
+
+    monkeypatch.setattr(release_module, "require_api_key", lambda **_: "test")
+    monkeypatch.setattr(release_module, "AbelClient", lambda **_: StubClient())
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "graph-release",
+            "doctor",
+            "--graph-release",
+            str(config_path),
+            "--ticker",
+            "ABG.price",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["status"] == "ready"
+    assert payload["checks"]["market_symbol_routes"]["status"] == "pass"
+    assert payload["checks"]["node_id_scalar_series"]["status"] == "pass"

@@ -59,7 +59,7 @@ def fetch_node_series(
     config: dict | None = None,
     client: AbelClient | None = None,
 ) -> pd.DataFrame:
-    """Fetch one raw graph-node series without symbol-mode price adjustment."""
+    """Fetch one CAP scalar graph-node series without price adjustment."""
 
     env_path = (config or {}).get("env_path", ".env")
     try:

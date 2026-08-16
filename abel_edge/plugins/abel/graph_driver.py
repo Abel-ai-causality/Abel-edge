@@ -68,7 +68,7 @@ def classify_v4_driver(
         "retrieval_mode": "node_id",
         "adjustment": "none",
         "timezone": "UTC",
-        "series_semantics": "raw_records",
+        "series_semantics": "point_in_time_scalar",
     }
     return {
         "node_id": node_id,
