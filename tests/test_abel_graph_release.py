@@ -270,7 +270,7 @@ def test_graph_release_doctor_blocks_non_scalar_raw_node_records(monkeypatch, tm
                 }
             ]
 
-        def fetch_node_series_page(self, *, node_id, start, end, limit, cursor_id, api_key):
+        def fetch_node_series_page(self, *, node_id, start, end, limit, cursor_date, api_key):
             return {
                 "mode": "node_records",
                 "node": {
@@ -282,7 +282,7 @@ def test_graph_release_doctor_blocks_non_scalar_raw_node_records(monkeypatch, tm
                     {"id": 1, "date": "2026-05-01", "event_count": 1},
                     {"id": 2, "date": "2026-05-01", "event_count": 2},
                 ],
-                "page": {"limit": 100, "max_id": 2, "has_more": False},
+                "page": {"limit": 100, "max_date": "2026-05-02", "has_more": False},
             }
 
     monkeypatch.setattr(release_module, "require_api_key", lambda **_: "test")
@@ -341,7 +341,7 @@ def test_graph_release_doctor_accepts_exact_scalar_node_series(monkeypatch, tmp_
                 }
             ]
 
-        def fetch_node_series_page(self, *, node_id, start, end, limit, cursor_id, api_key):
+        def fetch_node_series_page(self, *, node_id, start, end, limit, cursor_date, api_key):
             return {
                 "mode": "node_series",
                 "node": {"node_id": node_id, "feature": "event_count"},
@@ -349,7 +349,7 @@ def test_graph_release_doctor_accepts_exact_scalar_node_series(monkeypatch, tmp_
                     {"timestamp": "2026-05-01T00:00:00Z", "value": 21.0},
                     {"timestamp": "2026-05-02T00:00:00Z", "value": 25.0},
                 ],
-                "page": {"limit": 100, "max_id": 2, "has_more": False},
+                "page": {"limit": 100, "max_date": "2026-05-02", "has_more": False},
             }
 
     monkeypatch.setattr(release_module, "require_api_key", lambda **_: "test")

@@ -83,7 +83,9 @@ Notes:
 - canonical close/volume nodes use symbol mode so A-share and Hong Kong
   corporate-action adjustment matches the market-data contract
 - a missing node is an error; Edge does not retry it through `symbols`
-- cursor pagination uses `cursor_id` from the response `page.max_id`
+- scalar-series pagination sends `cursor_date` from the previous response's
+  `page.max_date`; raw diagnostic node-record pagination continues to use
+  `cursor_id/page.max_id`
 
 ## Response Shape
 
@@ -123,19 +125,20 @@ The scalar node response is:
   },
   "data": [
     {
+      "date": "2026-01-01",
       "timestamp": "2026-01-02T00:00:00Z",
-      "event_time": "2026-01-01T00:00:00Z",
       "value": 1.25
     }
   ],
-  "page": {"limit": 100, "max_id": 101, "has_more": true}
+  "page": {"limit": 100, "max_date": "2026-01-01", "has_more": true},
+  "series": {"grain": "daily", "aggregation": "sum"}
 }
 ```
 
 The descriptor `node.node_id` must equal the requested ID. `timestamp` is the
 earliest UTC visibility time; `event_time` is optional and defaults to that
 timestamp. Edge rejects raw `mode=node_records`, non-finite values, duplicate
-timestamps, non-UTC timestamps, identity drift, and stalled cursors.
+timestamps, non-UTC timestamps, identity drift, and stalled date cursors.
 
 ## Runtime Expectations
 

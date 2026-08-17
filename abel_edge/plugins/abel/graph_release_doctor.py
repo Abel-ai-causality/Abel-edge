@@ -151,7 +151,7 @@ def _probe_node_routes(routed, *, client, api_key: str) -> tuple[list[str], list
                 start=PROBE_START,
                 end=PROBE_END,
                 limit=PROBE_LIMIT,
-                cursor_id=None,
+                cursor_date=None,
                 api_key=api_key,
             )
         except Exception as exc:

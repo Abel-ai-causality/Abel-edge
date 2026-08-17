@@ -183,7 +183,7 @@ class AbelClient:
         start: str | None,
         end: str | None,
         limit: int | None,
-        cursor_id: int | None,
+        cursor_date: str | None,
         api_key: str,
     ) -> dict[str, Any]:
         """Fetch one exact CAP scalar-series page for a V4 node."""
@@ -194,7 +194,7 @@ class AbelClient:
             start=start,
             end=end,
             limit=limit,
-            cursor_id=cursor_id,
+            cursor_date=cursor_date,
             api_key=api_key,
         )
 

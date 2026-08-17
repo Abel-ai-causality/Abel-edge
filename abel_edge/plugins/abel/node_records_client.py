@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any, Callable
 
 
@@ -28,14 +28,14 @@ def fetch_all_node_series(
         raise ValueError("Canonical node series limit must be positive.")
     rows: list[dict[str, Any]] = []
     timestamps: set[str] = set()
-    cursor_id: int | None = None
+    cursor_date: str | None = None
     while remaining > 0:
         payload = fetch_page(
             node_id=canonical_id,
             start=start,
             end=end,
             limit=min(remaining, 1_000),
-            cursor_id=cursor_id,
+            cursor_date=cursor_date,
             api_key=api_key,
         )
         page_rows = _scalar_series_rows(payload, node_id=canonical_id)
@@ -61,12 +61,10 @@ def fetch_all_node_series(
         page = payload.get("page")
         if not isinstance(page, dict) or not page.get("has_more") or remaining <= 0:
             break
-        next_cursor = page.get("max_id")
-        if not isinstance(next_cursor, int) or (
-            cursor_id is not None and next_cursor <= cursor_id
-        ):
-            raise ValueError("Abel node_id cursor did not advance.")
-        cursor_id = next_cursor
+        next_cursor = _date_cursor(page.get("max_date"))
+        if cursor_date is not None and next_cursor <= _date_cursor(cursor_date):
+            raise ValueError("Abel node_id date cursor did not advance.")
+        cursor_date = next_cursor.isoformat()
     return rows
 
 
@@ -77,7 +75,7 @@ def fetch_node_series_page(
     start: str | None,
     end: str | None,
     limit: int | None,
-    cursor_id: int | None,
+    cursor_date: str | None,
     api_key: str,
 ) -> dict[str, Any]:
     """Request CAP's scalar-series shape for one exact V4 node."""
@@ -89,8 +87,8 @@ def fetch_node_series_page(
         "end": _serialize_timestamp(end),
         "limit": limit,
     }
-    if cursor_id is not None:
-        body["cursor_id"] = cursor_id
+    if cursor_date is not None:
+        body["cursor_date"] = cursor_date
     payload = post_market(endpoint="day_bar", body=body, api_key=api_key)
     if not isinstance(payload, dict):
         raise ValueError("Abel node_id scalar-series response must be a mapping.")
@@ -202,6 +200,14 @@ def _serialize_timestamp(value: Any) -> str | None:
     if hasattr(value, "isoformat"):
         return value.isoformat()
     return str(value)
+
+
+def _date_cursor(value: Any) -> date:
+    text = str(value or "").strip()
+    try:
+        return date.fromisoformat(text)
+    except ValueError as exc:
+        raise ValueError("Abel node_id date cursor did not advance.") from exc
 
 
 def _finite(value: Any) -> bool:
