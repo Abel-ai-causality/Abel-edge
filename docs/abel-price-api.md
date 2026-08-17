@@ -83,6 +83,9 @@ Notes:
 - canonical close/volume nodes use symbol mode so A-share and Hong Kong
   corporate-action adjustment matches the market-data contract
 - a missing node is an error; Edge does not retry it through `symbols`
+- a logical scalar-series request that spans calendar years is sent as one
+  non-cross-year CAP request per year; this is a transport partition only and
+  Edge validates and receipts the merged logical series
 - scalar-series pagination sends `cursor_date` from the previous response's
   `page.max_date`; raw diagnostic node-record pagination continues to use
   `cursor_id/page.max_id`
@@ -165,6 +168,13 @@ Runtime rules:
 Canonical node rows must have a unique UTC visibility timestamp. CAP applies
 the canonical node's key/filter and aggregation inside its V4 registry. Edge
 does not choose sum, mean, or last-row semantics on the consumer's behalf.
+
+When a point-in-time feed declares an explicit `cache_root`, Edge caches the
+receipt-checked response by the complete `series_spec` SHA-256. Reuse requires
+the same spec, source receipt, and a cached requested range covering the new
+request. The cache file is content-hashed; a missing, edited, or drifted entry
+is ignored and the canonical source is read again. Node IDs are never used as
+filesystem paths.
 
 ## Why This Contract
 

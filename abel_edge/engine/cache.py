@@ -77,6 +77,32 @@ def cache_entry_for_request(
     )
 
 
+def point_in_time_cache_entry(
+    *,
+    adapter: str,
+    series_spec_sha256: str,
+    cache_root: str | Path | None = None,
+) -> CacheEntry:
+    """Resolve a path-safe cache entry keyed by the complete frozen series spec."""
+
+    spec_hash = str(series_spec_sha256 or "").strip().lower()
+    if len(spec_hash) != 64 or any(char not in "0123456789abcdef" for char in spec_hash):
+        raise ValueError("point-in-time cache requires a lowercase series spec SHA-256")
+    normalized_adapter = str(adapter or "").strip().lower()
+    root = resolve_cache_root(cache_root)
+    entry_root = root / normalized_adapter / "point_in_time_series"
+    entry_root.mkdir(parents=True, exist_ok=True)
+    return CacheEntry(
+        root=root,
+        key=spec_hash,
+        adapter=normalized_adapter,
+        symbol=spec_hash,
+        timeframe="point_in_time_series",
+        data_path=entry_root / f"{spec_hash}.csv",
+        meta_path=entry_root / f"{spec_hash}.json",
+    )
+
+
 def load_cached_bars(entry: CacheEntry) -> pd.DataFrame | None:
     if not entry.data_path.exists():
         return None
@@ -94,6 +120,63 @@ def load_cached_metadata(entry: CacheEntry) -> dict[str, Any]:
     except json.JSONDecodeError:
         return {}
     return payload if isinstance(payload, dict) else {}
+
+
+def point_in_time_cache_covers_request(
+    metadata: dict[str, Any],
+    *,
+    series_spec_sha256: str,
+    source_receipt_sha256: str,
+    start: object | None,
+    end: object | None,
+    limit: int | None,
+) -> bool:
+    if metadata.get("contract") != "abel-edge.point-in-time-cache/v1":
+        return False
+    if metadata.get("series_spec_sha256") != series_spec_sha256:
+        return False
+    if metadata.get("source_receipt_sha256") != source_receipt_sha256:
+        return False
+    requested = metadata.get("requested_range") or {}
+    cached_start = _as_timestamp(requested.get("start"))
+    cached_end = _as_timestamp(requested.get("end"))
+    requested_start = _as_timestamp(start)
+    requested_end = _as_timestamp(end)
+    if requested_start is not None and (
+        cached_start is None or cached_start > requested_start
+    ):
+        return False
+    if requested_end is not None and (cached_end is None or cached_end < requested_end):
+        return False
+    cached_limit = requested.get("limit")
+    if limit is None:
+        if cached_limit is not None:
+            return False
+    else:
+        try:
+            if cached_limit is not None and int(cached_limit) < int(limit):
+                return False
+        except (TypeError, ValueError):
+            return False
+    return bool(metadata.get("data_sha256"))
+
+
+def load_cached_point_in_time_series(
+    entry: CacheEntry,
+    *,
+    metadata: dict[str, Any],
+) -> pd.DataFrame | None:
+    if not entry.data_path.is_file():
+        return None
+    expected_data_hash = str(metadata.get("data_sha256") or "")
+    if not expected_data_hash or _file_sha256(entry.data_path) != expected_data_hash:
+        return None
+    frame = pd.read_csv(entry.data_path)
+    frame.attrs["source_receipt_sha256"] = str(
+        metadata.get("source_receipt_sha256") or ""
+    )
+    frame.attrs["series_spec_sha256"] = str(metadata.get("series_spec_sha256") or "")
+    return frame
 
 
 def cache_covers_request(
@@ -174,6 +257,56 @@ def write_cached_bars(
     return metadata
 
 
+def write_cached_point_in_time_series(
+    entry: CacheEntry,
+    frame: pd.DataFrame,
+    *,
+    series_spec_sha256: str,
+    source_receipt_sha256: str,
+    requested_start: object | None,
+    requested_end: object | None,
+    requested_limit: int | None,
+) -> dict[str, Any]:
+    """Persist an exact receipt-checked point-in-time response."""
+
+    if "value" not in frame.columns or not {
+        "event_time",
+        "timestamp",
+    }.intersection(frame.columns):
+        raise ValueError(
+            "Cached point-in-time series requires value and event_time or timestamp."
+        )
+    entry.data_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = entry.data_path.with_suffix(".csv.partial")
+    frame.to_csv(temporary, index=False, lineterminator="\n")
+    temporary.replace(entry.data_path)
+    metadata = {
+        "contract": "abel-edge.point-in-time-cache/v1",
+        "adapter": entry.adapter,
+        "cache_key": entry.key,
+        "data_path": str(entry.data_path),
+        "metadata_path": str(entry.meta_path),
+        "data_sha256": _file_sha256(entry.data_path),
+        "series_spec_sha256": series_spec_sha256,
+        "source_receipt_sha256": source_receipt_sha256,
+        "requested_range": {
+            "start": _format_request_bound(requested_start),
+            "end": _format_request_bound(requested_end),
+            "limit": int(requested_limit) if requested_limit is not None else None,
+        },
+        "row_count": int(len(frame)),
+        "columns": list(frame.columns),
+        "updated_at": datetime.now(tz=UTC).isoformat(),
+    }
+    metadata_temporary = entry.meta_path.with_suffix(".json.partial")
+    metadata_temporary.write_text(
+        json.dumps(metadata, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    metadata_temporary.replace(entry.meta_path)
+    return metadata
+
+
 def build_cache_metadata(
     entry: CacheEntry,
     bars: pd.DataFrame,
@@ -231,6 +364,14 @@ def _sanitize_options(options: dict[str, Any]) -> dict[str, Any]:
             continue
         payload[str(key)] = value
     return payload
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _format_request_bound(value: object | None) -> str | None:

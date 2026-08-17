@@ -26,6 +26,9 @@ def compile_cap_node_series_spec(
     graph_ref: Mapping[str, Any],
     source_receipt_sha256: str,
     source_adapter: str = "abel",
+    source_observation_count: int | None = None,
+    source_first_timestamp: str | None = None,
+    source_last_timestamp: str | None = None,
 ) -> PointInTimeSeriesSpec:
     """Compile CAP's exact-node scalar shape without graph-transform metadata."""
 
@@ -40,6 +43,15 @@ def compile_cap_node_series_spec(
         raise PointInTimeSeriesContractError(
             "CAP node series requires graph_id and graph_version."
         )
+    provenance: dict[str, Any] = {
+        "source_receipt_sha256": source_receipt_sha256,
+    }
+    if source_observation_count is not None:
+        provenance["source_observation_count"] = int(source_observation_count)
+    if source_first_timestamp is not None:
+        provenance["source_first_timestamp"] = str(source_first_timestamp)
+    if source_last_timestamp is not None:
+        provenance["source_last_timestamp"] = str(source_last_timestamp)
     return PointInTimeSeriesSpec.from_mapping(
         {
             "contract": "abel-edge.point-in-time-series/v1",
@@ -65,7 +77,7 @@ def compile_cap_node_series_spec(
             },
             "transforms": [],
             "availability": {"mode": "explicit"},
-            "provenance": {"source_receipt_sha256": source_receipt_sha256},
+            "provenance": provenance,
         }
     )
 

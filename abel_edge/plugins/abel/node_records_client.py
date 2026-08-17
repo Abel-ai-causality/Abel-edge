@@ -28,44 +28,51 @@ def fetch_all_node_series(
         raise ValueError("Canonical node series limit must be positive.")
     rows: list[dict[str, Any]] = []
     timestamps: set[str] = set()
-    cursor_date: str | None = None
-    while remaining > 0:
-        payload = fetch_page(
-            node_id=canonical_id,
-            start=start,
-            end=end,
-            limit=min(remaining, 1_000),
-            cursor_date=cursor_date,
-            api_key=api_key,
-        )
-        page_rows = _scalar_series_rows(payload, node_id=canonical_id)
-        for row in page_rows[:remaining]:
-            timestamp = _utc_timestamp(row.get("timestamp"), label="timestamp")
-            if timestamp in timestamps:
-                raise ValueError(
-                    f"Abel node scalar series has duplicate UTC timestamp {timestamp}."
-                )
-            timestamps.add(timestamp)
-            normalized = dict(row)
-            normalized["timestamp"] = timestamp
-            if normalized.get("event_time") is not None:
-                normalized["event_time"] = _utc_timestamp(
-                    normalized["event_time"],
-                    label="event_time",
-                )
-            normalized["node_id"] = canonical_id
-            normalized["value"] = float(normalized["value"])
-            rows.append(normalized)
-        consumed = min(len(page_rows), remaining)
-        remaining -= consumed
-        page = payload.get("page")
-        if not isinstance(page, dict) or not page.get("has_more") or remaining <= 0:
+    for window_start, window_end in _calendar_year_windows(start, end):
+        cursor_date: str | None = None
+        while remaining > 0:
+            payload = fetch_page(
+                node_id=canonical_id,
+                start=window_start,
+                end=window_end,
+                limit=min(remaining, 1_000),
+                cursor_date=cursor_date,
+                api_key=api_key,
+            )
+            page_rows = _scalar_series_rows(payload, node_id=canonical_id)
+            for row in page_rows[:remaining]:
+                timestamp = _utc_timestamp(row.get("timestamp"), label="timestamp")
+                if timestamp in timestamps:
+                    raise ValueError(
+                        f"Abel node scalar series has duplicate UTC timestamp {timestamp}."
+                    )
+                timestamps.add(timestamp)
+                normalized = dict(row)
+                normalized["timestamp"] = timestamp
+                if normalized.get("event_time") is not None:
+                    normalized["event_time"] = _utc_timestamp(
+                        normalized["event_time"],
+                        label="event_time",
+                    )
+                normalized["node_id"] = canonical_id
+                normalized["value"] = float(normalized["value"])
+                rows.append(normalized)
+            consumed = min(len(page_rows), remaining)
+            remaining -= consumed
+            page = payload.get("page")
+            if (
+                not isinstance(page, dict)
+                or not page.get("has_more")
+                or remaining <= 0
+            ):
+                break
+            next_cursor = _date_cursor(page.get("max_date"))
+            if cursor_date is not None and next_cursor <= _date_cursor(cursor_date):
+                raise ValueError("Abel node_id date cursor did not advance.")
+            cursor_date = next_cursor.isoformat()
+        if remaining <= 0:
             break
-        next_cursor = _date_cursor(page.get("max_date"))
-        if cursor_date is not None and next_cursor <= _date_cursor(cursor_date):
-            raise ValueError("Abel node_id date cursor did not advance.")
-        cursor_date = next_cursor.isoformat()
-    return rows
+    return sorted(rows, key=lambda row: row["timestamp"])
 
 
 def fetch_node_series_page(
@@ -200,6 +207,35 @@ def _serialize_timestamp(value: Any) -> str | None:
     if hasattr(value, "isoformat"):
         return value.isoformat()
     return str(value)
+
+
+def _calendar_year_windows(start: Any, end: Any) -> list[tuple[Any, Any]]:
+    start_date = _request_date(start)
+    end_date = _request_date(end)
+    if start_date is None or end_date is None or start_date.year == end_date.year:
+        return [(start, end)]
+    if end_date < start_date:
+        raise ValueError("Canonical node series end must not precede start.")
+    windows = []
+    for year in range(start_date.year, end_date.year + 1):
+        window_start = start if year == start_date.year else f"{year:04d}-01-01"
+        window_end = end if year == end_date.year else f"{year:04d}-12-31"
+        windows.append((window_start, window_end))
+    return windows
+
+
+def _request_date(value: Any) -> date | None:
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    text = str(value or "").strip()
+    if len(text) < 10:
+        return None
+    try:
+        return date.fromisoformat(text[:10])
+    except ValueError:
+        return None
 
 
 def _date_cursor(value: Any) -> date:

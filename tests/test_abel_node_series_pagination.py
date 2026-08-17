@@ -5,6 +5,111 @@ import pytest
 from abel_edge.plugins.abel.client import AbelClient
 
 
+def test_fetch_node_series_partitions_cross_year_requests_and_resets_date_cursor():
+    class StubSession:
+        def __init__(self):
+            self.bodies = []
+
+        def post(self, _url, *, json=None, headers=None, timeout=None):
+            self.bodies.append(json)
+            body = json or {}
+            start = body["start"]
+            cursor = body.get("cursor_date")
+            if start == "2025-01-01" and cursor is None:
+                return StubResponse(
+                    date="2025-01-01",
+                    timestamp="2025-01-02T00:00:00Z",
+                    has_more=True,
+                )
+            dates = {
+                "2024-12-30": ("2024-12-31", "2025-01-01T00:00:00Z"),
+                "2025-01-01": ("2025-01-02", "2025-01-03T00:00:00Z"),
+                "2026-01-01": ("2026-01-01", "2026-01-02T00:00:00Z"),
+            }
+            date_value, timestamp = dates[start]
+            return StubResponse(
+                date=date_value,
+                timestamp=timestamp,
+                has_more=False,
+            )
+
+    class StubResponse:
+        status_code = 200
+        headers = {}
+
+        def __init__(self, *, date, timestamp, has_more):
+            self.date = date
+            self.timestamp = timestamp
+            self.has_more = has_more
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "mode": "node_series",
+                "node": {"node_id": "catalog:test#1"},
+                "data": [
+                    {
+                        "date": self.date,
+                        "timestamp": self.timestamp,
+                        "value": 1.0,
+                    }
+                ],
+                "page": {
+                    "has_more": self.has_more,
+                    "max_date": self.date,
+                },
+            }
+
+    session = StubSession()
+    rows = AbelClient(session=session).fetch_node_series(
+        node_id="catalog:test#1",
+        start="2024-12-30",
+        end="2026-01-02",
+        limit=10,
+        api_key="abel_test",
+    )
+
+    assert [row["timestamp"] for row in rows] == [
+        "2025-01-01T00:00:00Z",
+        "2025-01-02T00:00:00Z",
+        "2025-01-03T00:00:00Z",
+        "2026-01-02T00:00:00Z",
+    ]
+    assert session.bodies == [
+        {
+            "node_id": "catalog:test#1",
+            "shape": "series",
+            "start": "2024-12-30",
+            "end": "2024-12-31",
+            "limit": 10,
+        },
+        {
+            "node_id": "catalog:test#1",
+            "shape": "series",
+            "start": "2025-01-01",
+            "end": "2025-12-31",
+            "limit": 9,
+        },
+        {
+            "node_id": "catalog:test#1",
+            "shape": "series",
+            "start": "2025-01-01",
+            "end": "2025-12-31",
+            "limit": 8,
+            "cursor_date": "2025-01-01",
+        },
+        {
+            "node_id": "catalog:test#1",
+            "shape": "series",
+            "start": "2026-01-01",
+            "end": "2026-01-02",
+            "limit": 7,
+        },
+    ]
+
+
 def test_fetch_node_series_follows_cap_date_cursor_pages_without_losing_rows():
     class StubSession:
         def __init__(self):

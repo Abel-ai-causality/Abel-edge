@@ -15,7 +15,11 @@ from abel_edge.engine.cache import (
     cache_entry_for_request,
     load_cached_bars,
     load_cached_metadata,
+    load_cached_point_in_time_series,
+    point_in_time_cache_covers_request,
+    point_in_time_cache_entry,
     write_cached_bars,
+    write_cached_point_in_time_series,
 )
 from abel_edge.engine.feed_contract import (
     FeedContractError,
@@ -155,13 +159,54 @@ class AbelDataFeedAdapter:
                     "Abel canonical-node data support is unavailable. "
                     "See: abel_edge/plugins/AGENTS.md"
                 ) from exc
-            return canonical_module.load_canonical_node_series(
+            cache_root = request.options.get("cache_root")
+            entry = None
+            if cache_root:
+                entry = point_in_time_cache_entry(
+                    adapter=request.adapter,
+                    series_spec_sha256=request.series_spec.sha256,
+                    cache_root=cache_root,
+                )
+                metadata = load_cached_metadata(entry)
+                source_receipt = str(
+                    request.series_spec.payload["provenance"][
+                        "source_receipt_sha256"
+                    ]
+                )
+                if point_in_time_cache_covers_request(
+                    metadata,
+                    series_spec_sha256=request.series_spec.sha256,
+                    source_receipt_sha256=source_receipt,
+                    start=request.start,
+                    end=guarded_end,
+                    limit=request.limit,
+                ):
+                    cached = load_cached_point_in_time_series(
+                        entry,
+                        metadata=metadata,
+                    )
+                    if cached is not None:
+                        return cached
+            frame = canonical_module.load_canonical_node_series(
                 series_spec=request.series_spec,
                 start=request.start,
                 end=guarded_end,
                 limit=request.limit,
                 config=request.options,
             )
+            if entry is not None:
+                write_cached_point_in_time_series(
+                    entry,
+                    frame,
+                    series_spec_sha256=request.series_spec.sha256,
+                    source_receipt_sha256=str(
+                        frame.attrs.get("source_receipt_sha256") or ""
+                    ),
+                    requested_start=request.start,
+                    requested_end=guarded_end,
+                    requested_limit=request.limit,
+                )
+            return frame
 
         symbol = request.symbol
         if not symbol:

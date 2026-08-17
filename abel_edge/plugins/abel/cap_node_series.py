@@ -39,11 +39,20 @@ def prepare_cap_node_series_spec(
         limit=limit,
         config=config or {},
     )
+    records = rows.to_dict("records") if isinstance(rows, pd.DataFrame) else list(rows)
+    if not records:
+        raise CanonicalNodeDataError(
+            f"CAP node scalar series returned no observations: {node_id}"
+        )
     receipt = cap_node_series_receipt(rows, node_id=node_id)
+    timestamps = sorted(optional_text(row.get("timestamp")) for row in records)
     return compile_cap_node_series_spec(
         node_id=node_id,
         graph_ref=graph_ref,
         source_receipt_sha256=receipt,
+        source_observation_count=len(records),
+        source_first_timestamp=timestamps[0],
+        source_last_timestamp=timestamps[-1],
     )
 
 

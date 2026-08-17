@@ -156,3 +156,29 @@ def test_prepare_cap_node_series_spec_freezes_live_response_receipt(monkeypatch)
         cap_node_series_receipt(ROWS, node_id=NODE_ID)
     )
     assert spec.payload["source"]["request"]["node_id"] == NODE_ID
+    assert spec.payload["provenance"]["source_observation_count"] == 2
+    assert (
+        spec.payload["provenance"]["source_first_timestamp"]
+        == "2026-05-01T00:00:00Z"
+    )
+    assert (
+        spec.payload["provenance"]["source_last_timestamp"]
+        == "2026-05-02T00:00:00Z"
+    )
+
+
+def test_prepare_cap_node_series_spec_rejects_empty_live_series(monkeypatch):
+    monkeypatch.setattr(
+        "abel_edge.plugins.abel.cap_node_series.fetch_node_series",
+        lambda **_: pd.DataFrame(columns=["timestamp", "node_id", "value"]),
+    )
+
+    with pytest.raises(CanonicalNodeDataError, match="returned no observations"):
+        prepare_cap_node_series_spec(
+            node_id=NODE_ID,
+            graph_ref=GRAPH_REF,
+            start="2026-05-01",
+            end="2026-05-02",
+            limit=20,
+            config={},
+        )
