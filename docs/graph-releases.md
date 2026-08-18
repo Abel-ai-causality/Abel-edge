@@ -14,7 +14,8 @@ The contract is `abel-edge.graph-release/v1`:
   "provider": "abel",
   "graph_ref": {
     "graph_id": "abel-main",
-    "graph_version": "CausalNodeV4"
+    "graph_version": "CausalNodeV4",
+    "edge_set": "recall"
   }
 }
 ```
@@ -23,6 +24,10 @@ This selects the V4 graph currently served by CAP. It is not a reference to a
 downloaded `allnodes_causal_graph_*` package. `release_id` and
 `expected_release_receipt_sha256` are optional assertions: Edge verifies them
 when supplied, but does not invent them when CAP exposes only graph version.
+For V4, `graph_ref.edge_set` accepts `precision` or `recall` and defaults to
+`recall` when omitted. V3 does not accept this field. The normalized selector
+is included in the canonical configuration hash and is sent to CAP as
+`context.graph_ref.edge_set`.
 Credentials and data are forbidden in this file; the Abel provider reads
 authentication from its normal environment.
 

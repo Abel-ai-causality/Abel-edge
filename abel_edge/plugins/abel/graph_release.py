@@ -16,6 +16,7 @@ from abel_edge.plugins.abel.credentials import require_api_key
 GRAPH_RELEASE_CONTRACT = "abel-edge.graph-release/v1"
 GRAPH_RELEASE_DOCTOR_CONTRACT = "abel-edge.graph-release-doctor/v1"
 GRAPH_DISCOVERY_CONTRACT = "abel-edge.graph-discovery/v2"
+V4_EDGE_SETS = {"precision", "recall"}
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _TOP_LEVEL_KEYS = {
     "contract",
@@ -71,7 +72,9 @@ class GraphReleaseConfig:
         graph_ref = payload.get("graph_ref")
         if not isinstance(graph_ref, dict):
             raise GraphReleaseContractError("graph release graph_ref must be a mapping.")
-        unknown_ref = sorted(set(graph_ref) - {"graph_id", "graph_version", "release_id"})
+        unknown_ref = sorted(
+            set(graph_ref) - {"graph_id", "graph_version", "release_id", "edge_set"}
+        )
         if unknown_ref:
             raise GraphReleaseContractError(
                 f"graph release graph_ref has unknown keys: {unknown_ref}."
@@ -83,6 +86,21 @@ class GraphReleaseConfig:
                 )
         graph_ref["graph_id"] = str(graph_ref["graph_id"]).strip()
         graph_ref["graph_version"] = str(graph_ref["graph_version"]).strip()
+        edge_set = graph_ref.get("edge_set")
+        if graph_ref["graph_version"] == "CausalNodeV4":
+            normalized_edge_set = (
+                "recall" if edge_set is None else str(edge_set).strip().lower()
+            )
+            if normalized_edge_set not in V4_EDGE_SETS:
+                raise GraphReleaseContractError(
+                    "graph release graph_ref.edge_set must be 'precision' or "
+                    "'recall' for CausalNodeV4."
+                )
+            graph_ref["edge_set"] = normalized_edge_set
+        elif edge_set is not None:
+            raise GraphReleaseContractError(
+                "graph release graph_ref.edge_set is only valid for CausalNodeV4."
+            )
         if graph_ref.get("release_id") is not None:
             graph_ref["release_id"] = str(graph_ref["release_id"]).strip()
             if not graph_ref["release_id"]:

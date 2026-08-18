@@ -36,7 +36,11 @@ def test_graph_release_hash_is_canonical_and_credentials_are_forbidden():
     right = GraphReleaseConfig.from_mapping(right_payload)
 
     assert left.sha256 == right.sha256
-    assert left.graph_ref == _v4_release()["graph_ref"]
+    assert left.graph_ref == {
+        "graph_id": "abel-main",
+        "graph_version": "CausalNodeV4",
+        "edge_set": "recall",
+    }
 
     unsafe = _v4_release()
     unsafe["api_key"] = "secret"
@@ -50,8 +54,23 @@ def test_v4_release_is_the_cap_graph_ref_not_a_legacy_s3_package():
     assert release.graph_ref == {
         "graph_id": "abel-main",
         "graph_version": "CausalNodeV4",
+        "edge_set": "recall",
     }
     assert release.expected_release_receipt_sha256 is None
+
+
+def test_v4_release_accepts_explicit_precision_but_rejects_unknown_edge_set():
+    precision = _v4_release()
+    precision["graph_ref"]["edge_set"] = "precision"
+
+    release = GraphReleaseConfig.from_mapping(precision)
+
+    assert release.graph_ref["edge_set"] == "precision"
+
+    invalid = _v4_release()
+    invalid["graph_ref"]["edge_set"] = "broad"
+    with pytest.raises(GraphReleaseContractError, match="edge_set"):
+        GraphReleaseConfig.from_mapping(invalid)
 
 
 def test_v3_release_keeps_legacy_graph_ref_without_release_receipt():
@@ -70,6 +89,11 @@ def test_v3_release_keeps_legacy_graph_ref_without_release_receipt():
         "graph_id": "abel-main",
         "graph_version": "CausalNodeV3",
     }
+
+    invalid = release.payload
+    invalid["graph_ref"]["edge_set"] = "recall"
+    with pytest.raises(GraphReleaseContractError, match="only valid for CausalNodeV4"):
+        GraphReleaseConfig.from_mapping(invalid)
 
 
 def test_discover_sends_caller_graph_release_ref():
@@ -94,6 +118,7 @@ def test_discover_sends_caller_graph_release_ref():
     graph_ref = {
         "graph_id": "abel-main",
         "graph_version": "CausalNodeV4",
+        "edge_set": "recall",
     }
     session = StubSession()
 
