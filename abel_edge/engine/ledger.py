@@ -122,8 +122,9 @@ def append_trade_log_rows(path: str | Path, rows: list[dict]) -> pd.DataFrame:
 
 
 def compound_cum_return(pnl: np.ndarray) -> np.ndarray:
-    """Return compounded cumulative return from per-period simple returns."""
-    return np.cumprod(1.0 + np.asarray(pnl, dtype=float)) - 1.0
+    """Return limited-liability compounded return with absorbing insolvency."""
+    gross_return_factors = 1.0 + np.asarray(pnl, dtype=float)
+    return np.cumprod(np.maximum(gross_return_factors, 0.0)) - 1.0
 
 
 def _dedupe_trade_rows(df: pd.DataFrame) -> pd.DataFrame:

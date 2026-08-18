@@ -75,6 +75,23 @@ def test_append_trade_log_rows_cum_return_uses_compounding(tmp_path) -> None:
     assert float(df.iloc[-1]["cum_return"]) == pytest.approx(0.21)
 
 
+def test_write_trade_log_cum_return_stays_at_total_loss_after_insolvency(tmp_path) -> None:
+    path = tmp_path / "log.csv"
+    dates = pd.to_datetime(
+        ["2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z"], utc=True
+    )
+    write_trade_log(
+        dates,
+        np.array([4.612244897959184, 4.0]),
+        np.array([-1.201581113678661, 4.0]),
+        np.array([-0.2605197989834265, 1.0]),
+        path,
+    )
+
+    df = read_trade_log(path)
+    assert list(df["cum_return"]) == pytest.approx([-1.0, -1.0])
+
+
 def test_write_trade_log_preserves_existing_live_rows(tmp_path) -> None:
     path = tmp_path / "log.csv"
     dates = pd.to_datetime(["2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z"], utc=True)
