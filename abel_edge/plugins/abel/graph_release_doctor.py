@@ -219,8 +219,11 @@ def _probe_market_routes(routed, *, client, api_key: str) -> list[str]:
         except Exception as exc:
             reasons.append(f"{item['node_id']}: symbol route failed: {exc}")
             continue
-        if not _has_finite_market_row(rows, ref["field"]):
-            reasons.append(f"{item['node_id']}: symbol route returned no finite {ref['field']} values")
+        if not _has_finite_market_row(rows, ref["field"], ref["symbol"]):
+            reasons.append(
+                f"{item['node_id']}: symbol route returned no finite "
+                f"{ref['field']} values for {ref['symbol']}"
+            )
     return reasons
 
 
@@ -288,9 +291,13 @@ def _node_id(item: dict[str, Any]) -> str:
     return ""
 
 
-def _has_finite_market_row(rows: Any, field: str) -> bool:
+def _has_finite_market_row(rows: Any, field: str, symbol: str) -> bool:
+    expected_symbol = str(symbol or "").strip().upper()
     return isinstance(rows, list) and any(
-        isinstance(row, dict) and row.get("timestamp") and _finite(row.get(field))
+        isinstance(row, dict)
+        and str(row.get("symbol") or "").strip().upper() == expected_symbol
+        and row.get("timestamp")
+        and _finite(row.get(field))
         for row in rows
     )
 

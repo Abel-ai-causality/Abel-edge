@@ -325,3 +325,43 @@ def test_doctor_verifies_each_discovery_call_provenance_independently():
     assert any("parents:" in reason and "wrong-graph" in reason for reason in identity["reasons"])
     assert identity["observed"]["parents"]["graph_id"] == "wrong-graph"
     assert identity["observed"]["markov_blanket"]["graph_id"] == "abel-main"
+
+
+def test_doctor_rejects_market_rows_for_a_different_symbol():
+    class StubClient:
+        def cap_methods(self, *, api_key):
+            return [{"verb": "traverse.parents"}, {"verb": "graph.markov_blanket"}]
+
+        def discover_parents(self, **_kwargs):
+            return [{"node_id": "MSFT.price"}]
+
+        def markov_blanket(self, **_kwargs):
+            return []
+
+        def graph_provenance(self):
+            return {
+                "graph_id": "abel-main",
+                "graph_version": "CausalNodeV4",
+                "edge_set": "recall",
+            }
+
+        def fetch_bars(self, **_kwargs):
+            return [
+                {
+                    "timestamp": "2026-05-01T00:00:00Z",
+                    "symbol": "AAPL",
+                    "close": 10.0,
+                }
+            ]
+
+    result = assess_graph_release(
+        release=_v4_release(),
+        api_key="test",
+        client=StubClient(),
+        ticker="AAPL.price",
+    )
+
+    assert result["status"] == "blocked"
+    market_check = result["checks"]["market_symbol_routes"]
+    assert market_check["status"] == "blocked"
+    assert any("MSFT" in reason for reason in market_check["reasons"])

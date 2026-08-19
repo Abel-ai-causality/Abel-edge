@@ -53,6 +53,8 @@ their own provenance; a later successful call cannot hide an earlier selector
 mismatch.
 Use a ticker with a non-market parent when testing arbitrary-family V4 support;
 a market-only target proves only the adjusted symbol route.
+Market probes require a finite value on a response row whose normalized symbol
+matches the requested driver; a finite row for another symbol does not pass.
 
 Select the same release during discovery:
 
