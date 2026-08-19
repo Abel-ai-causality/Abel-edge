@@ -101,55 +101,6 @@ def test_fetch_node_series_uses_exact_single_node_id_mode():
     assert "fields" not in session.calls[0]["json"]
 
 
-def test_fetch_node_records_page_preserves_descriptor_and_cursor():
-    class StubSession:
-        def __init__(self):
-            self.body = None
-
-        def post(self, _url, *, json=None, headers=None, timeout=None):
-            self.body = json
-            return StubResponse()
-
-    class StubResponse:
-        status_code = 200
-        headers = {}
-
-        def raise_for_status(self):
-            return None
-
-        def json(self):
-            return {
-                "mode": "node_records",
-                "node": {
-                    "node_id": "health.openfda.drug.events:event_count#96bc3e82",
-                    "source_table": "his_openfda_drug_event_daily",
-                    "feature": "event_count",
-                },
-                "data": [{"id": 101, "date": "2026-05-01", "event_count": 1}],
-                "page": {"limit": 50, "max_id": 101, "has_more": True},
-            }
-
-    session = StubSession()
-    payload = AbelClient(session=session).fetch_node_records_page(
-        node_id="health.openfda.drug.events:event_count#96bc3e82",
-        start="2026-05-01",
-        end="2026-05-10",
-        limit=50,
-        cursor_id=100,
-        api_key="abel_test",
-    )
-
-    assert payload["node"]["feature"] == "event_count"
-    assert payload["page"]["max_id"] == 101
-    assert session.body == {
-        "node_id": "health.openfda.drug.events:event_count#96bc3e82",
-        "start": "2026-05-01",
-        "end": "2026-05-10",
-        "limit": 50,
-        "cursor_id": 100,
-    }
-
-
 def test_fetch_node_series_rejects_raw_record_shape():
     class StubSession:
         def post(self, _url, *, json=None, headers=None, timeout=None):

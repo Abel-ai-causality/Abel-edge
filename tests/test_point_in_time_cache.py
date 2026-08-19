@@ -8,37 +8,13 @@ import pandas as pd
 
 from abel_edge.engine.adapter_registry import AbelDataFeedAdapter, FeedLoadRequest
 from abel_edge.engine.cache import point_in_time_cache_covers_request
-from abel_edge.plugins.abel.canonical_node import compile_canonical_node_series_spec
+from abel_edge.plugins.abel import compile_cap_node_series_spec
 
 
 def _point_spec():
-    node = {
-        "contract": "abel-edge.graph-node-spec/v1",
-        "node_id": "canonical:AAPL:close",
-        "family": "ticker_daily_close_robust_asinh_return",
-        "source": {
-            "api_dataset": "market.price.daily",
-            "field": "close",
-            "symbol": "AAPL",
-        },
-        "alignment": {
-            "mode": "exchange_close_first_05:00_utc_cutoff",
-            "exchange": "NASDAQ",
-            "timezone": "America/New_York",
-            "availability_lag_days": 0,
-            "exchange_reference_receipt_sha256": "c" * 64,
-        },
-        "transform": {
-            "kind": "log_return",
-            "center": 0.0,
-            "scale": 1.0,
-            "alpha": 1.0,
-            "weekday_centers_index": None,
-        },
-        "release_receipt_sha256": "d" * 64,
-    }
-    return compile_canonical_node_series_spec(
-        node,
+    return compile_cap_node_series_spec(
+        node_id="health.openfda.drug.events:event_count#96bc3e82",
+        graph_ref={"graph_id": "abel-main", "graph_version": "CausalNodeV4"},
         source_receipt_sha256="e" * 64,
     )
 
@@ -49,7 +25,7 @@ def test_builtin_abel_adapter_reuses_exact_point_in_time_cache(tmp_path, monkeyp
 
     class CanonicalModule:
         @staticmethod
-        def load_canonical_node_series(**kwargs):
+        def load_cap_node_series(**kwargs):
             calls.append(kwargs)
             frame = pd.DataFrame(
                 {
@@ -65,7 +41,7 @@ def test_builtin_abel_adapter_reuses_exact_point_in_time_cache(tmp_path, monkeyp
     real_import = importlib.import_module
 
     def fake_import(name):
-        if name == "abel_edge.plugins.abel.canonical_node_data":
+        if name == "abel_edge.plugins.abel.cap_node_series":
             return CanonicalModule()
         return real_import(name)
 

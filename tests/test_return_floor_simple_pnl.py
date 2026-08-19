@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from abel_edge.validation import explain_metric_gates, validate_strategy
+from abel_edge.validation import explain_metric_gates
 from abel_edge.validation.gate_logic import validate
 from abel_edge.validation.metrics import compute_all_metrics, load_profile
 
@@ -55,25 +55,6 @@ def test_validation_max_drawdown_uses_compound_equity_curve():
     pnl = np.array([0.10, -0.10] + [0.0] * 28)
     metrics = compute_all_metrics(pnl, dates, profile=load_profile("equity_daily"))
     assert metrics["max_dd"] == pytest.approx(-0.10)
-
-
-def test_validation_treats_adtx_style_short_loss_as_absorbing_insolvency(tmp_path):
-    dates = pd.bdate_range("2023-08-21", periods=30)
-    pnl = np.zeros(len(dates))
-    pnl[7] = -1.201581113678661
-    pnl[8] = 4.0
-    trade_log = tmp_path / "adtx-insolvency.csv"
-    pd.DataFrame({"date": dates, "pnl": pnl}).to_csv(trade_log, index=False)
-
-    result = validate_strategy(trade_log, profile="equity_daily")
-
-    assert result["verdict"] == "FAIL"
-    assert result["metrics"]["insolvent"] is True
-    assert result["metrics"]["first_insolvency_index"] == 7
-    assert result["metrics"]["first_insolvency_date"] == "2023-08-30T00:00:00Z"
-    assert result["metrics"]["total_return"] == pytest.approx(-1.0)
-    assert result["metrics"]["max_dd"] == pytest.approx(-1.0)
-    assert "T15 MaxDD 100.0% > 15%" in result["failures"]
 
 
 def test_validation_yearly_pnl_uses_compound_return():

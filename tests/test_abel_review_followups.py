@@ -7,9 +7,6 @@ import hashlib
 import pandas as pd
 
 from abel_edge.engine.feed_loader import load_feed_frame
-from abel_edge.plugins.abel.canonical_source_window import (
-    resolve_materialization_window,
-)
 from abel_edge.plugins.abel.graph_release import GraphReleaseConfig
 from abel_edge.plugins.abel.graph_release_doctor import (
     _identity_reasons,
@@ -57,24 +54,6 @@ def test_doctor_verifies_every_configured_graph_selector():
     assert any("graph_id" in reason and "another-graph" in reason for reason in mismatched)
     assert any("edge_set" in reason and "precision" in reason for reason in mismatched)
     assert any("edge_set" in reason and "<missing>" in reason for reason in missing)
-
-
-def test_unfrozen_source_window_reaches_back_by_availability_lag():
-    source_start, source_end, source_limit, visible_start, visible_end = (
-        resolve_materialization_window(
-            start="2024-01-03",
-            end="2024-01-10",
-            limit=20,
-            config={},
-            availability_lag_days=2,
-        )
-    )
-
-    assert source_start == "2024-01-01"
-    assert source_end == "2024-01-10"
-    assert source_limit is None
-    assert visible_start == "2024-01-03"
-    assert visible_end == "2024-01-10"
 
 
 def test_point_in_time_date_only_end_includes_the_whole_utc_day(tmp_path):

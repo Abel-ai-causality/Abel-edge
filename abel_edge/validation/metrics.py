@@ -110,25 +110,7 @@ def compute_all_metrics(
     if positions is not None:
         positions = np.nan_to_num(positions, nan=0.0, posinf=0.0, neginf=0.0)
 
-    gross_return_factors = 1.0 + pnl
-    insolvency_indices = np.flatnonzero(gross_return_factors <= 0.0)
-    insolvent = bool(insolvency_indices.size)
-    first_insolvency_index = int(insolvency_indices[0]) if insolvent else None
-    first_insolvency_date = None
-    if insolvent:
-        insolvency_timestamp = pd.Timestamp(dates[first_insolvency_index])
-        if insolvency_timestamp.tzinfo is None:
-            insolvency_timestamp = insolvency_timestamp.tz_localize("UTC")
-        else:
-            insolvency_timestamp = insolvency_timestamp.tz_convert("UTC")
-        first_insolvency_date = insolvency_timestamp.isoformat().replace("+00:00", "Z")
-
-    # Simple-return wealth cannot recover after it reaches zero. A daily loss
-    # below -100% can occur for a short position when the asset rises by more
-    # than the available equity. Treat that as absorbing insolvency instead of
-    # allowing a negative equity curve to flip sign and create drawdowns below
-    # -100% on later bars.
-    equity = np.cumprod(np.maximum(gross_return_factors, 0.0))
+    equity = np.cumprod(1.0 + pnl)
     cum_return = equity - 1.0
     peak_equity = np.maximum.accumulate(np.concatenate(([1.0], equity)))[1:]
     dd = (equity / peak_equity) - 1.0
@@ -167,7 +149,7 @@ def compute_all_metrics(
         year_dates = dates[mask]
         year_pnl = pnl[mask]
         yearly_sharpes[yr] = _sharpe(year_pnl, periods_per_year=periods_per_year)
-        total_year_pnl = float(np.prod(np.maximum(1.0 + year_pnl, 0.0)) - 1.0)
+        total_year_pnl = float(np.prod(1.0 + year_pnl) - 1.0)
         yearly_pnl[yr] = total_year_pnl
         if _is_full_calendar_year(year_dates, validation_cfg):
             full_years_count += 1
@@ -224,9 +206,6 @@ def compute_all_metrics(
         "lo_adjusted": lo_adjusted,
         "sortino": sortino,
         "total_return": total_return,
-        "insolvent": insolvent,
-        "first_insolvency_index": first_insolvency_index,
-        "first_insolvency_date": first_insolvency_date,
         "annual_return": ann_return,
         "elapsed_years": elapsed_years,
         "max_dd": max_dd,

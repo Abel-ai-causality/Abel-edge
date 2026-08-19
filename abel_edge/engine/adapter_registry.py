@@ -152,7 +152,7 @@ class AbelDataFeedAdapter:
                 )
             try:
                 canonical_module = importlib.import_module(
-                    "abel_edge.plugins.abel.canonical_node_data"
+                    "abel_edge.plugins.abel.cap_node_series"
                 )
             except ImportError as exc:
                 raise AdapterRegistryError(
@@ -187,7 +187,7 @@ class AbelDataFeedAdapter:
                     )
                     if cached is not None:
                         return cached
-            frame = canonical_module.load_canonical_node_series(
+            frame = canonical_module.load_cap_node_series(
                 series_spec=request.series_spec,
                 start=request.start,
                 end=guarded_end,

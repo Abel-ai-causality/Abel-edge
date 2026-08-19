@@ -9,10 +9,10 @@ from abel_edge.plugins.abel import (
     compile_cap_node_series_spec,
     prepare_cap_node_series_spec,
 )
-from abel_edge.plugins.abel.canonical_node_data import (
+from abel_edge.plugins.abel.cap_node_series import (
     CanonicalNodeDataError,
     cap_node_series_receipt,
-    load_canonical_node_series,
+    load_cap_node_series,
 )
 
 
@@ -85,7 +85,7 @@ def test_cap_node_series_materializer_replays_exact_series_and_receipt(monkeypat
         fake_fetch_node_series,
     )
 
-    frame = load_canonical_node_series(
+    frame = load_cap_node_series(
         series_spec=spec,
         start="2026-05-01",
         end="2026-05-02",
@@ -116,6 +116,55 @@ def test_cap_node_series_materializer_replays_exact_series_and_receipt(monkeypat
     ]
 
 
+def test_cap_runtime_window_replays_frozen_receipt_window(monkeypatch):
+    rows = [
+        {
+            "timestamp": "2026-01-02T00:00:00Z",
+            "event_time": "2026-01-01T00:00:00Z",
+            "node_id": NODE_ID,
+            "value": 10.0,
+        },
+        *ROWS,
+        {
+            "timestamp": "2026-12-02T00:00:00Z",
+            "event_time": "2026-12-01T00:00:00Z",
+            "node_id": NODE_ID,
+            "value": 30.0,
+        },
+    ]
+    calls = []
+
+    def fake_fetch_node_series(**kwargs):
+        calls.append(kwargs)
+        return pd.DataFrame(rows)
+
+    monkeypatch.setattr(
+        "abel_edge.plugins.abel.cap_node_series.fetch_node_series",
+        fake_fetch_node_series,
+    )
+    spec = compile_cap_node_series_spec(
+        node_id=NODE_ID,
+        graph_ref=GRAPH_REF,
+        source_receipt_sha256=cap_node_series_receipt(rows, node_id=NODE_ID),
+    )
+
+    frame = load_cap_node_series(
+        series_spec=spec,
+        start="2026-05-01",
+        end="2026-05-31",
+        limit=1,
+        config={"source_start": "2026-01-01", "source_end": "2026-12-31"},
+    )
+
+    assert (calls[0]["start"], calls[0]["end"], calls[0]["limit"]) == (
+        "2026-01-01",
+        "2026-12-31",
+        None,
+    )
+    assert list(frame["timestamp"]) == ["2026-05-02T00:00:00Z"]
+    assert list(frame["value"]) == [25.0]
+
+
 def test_cap_node_series_materializer_rejects_response_receipt_drift(monkeypatch):
     spec = compile_cap_node_series_spec(
         node_id=NODE_ID,
@@ -128,7 +177,7 @@ def test_cap_node_series_materializer_rejects_response_receipt_drift(monkeypatch
     )
 
     with pytest.raises(CanonicalNodeDataError, match="source receipt drift"):
-        load_canonical_node_series(
+        load_cap_node_series(
             series_spec=spec,
             start="2026-05-01",
             end="2026-05-02",

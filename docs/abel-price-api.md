@@ -87,8 +87,7 @@ Notes:
   non-cross-year CAP request per year; this is a transport partition only and
   Edge validates and receipts the merged logical series
 - scalar-series pagination sends `cursor_date` from the previous response's
-  `page.max_date`; raw diagnostic node-record pagination continues to use
-  `cursor_id/page.max_id`
+  `page.max_date`
 
 ## Response Shape
 

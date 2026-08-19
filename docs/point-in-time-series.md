@@ -91,10 +91,8 @@ declares a native-only feed fails before strategy execution.
 
 ## Canonical Graph Nodes
 
-`abel_edge.plugins.abel.compile_cap_node_series_spec` compiles CAP's minimal
-exact-node scalar shape into this generic contract. The older
-`compile_canonical_node_series_spec` remains available for a caller that
-already owns a complete frozen `abel-edge.graph-node-spec/v1`.
+`abel_edge.plugins.abel.compile_cap_node_series_spec` compiles CAP's exact-node
+scalar shape into this generic contract.
 
 Graph selection and the CAP readiness gate are defined in
 [`graph-releases.md`](graph-releases.md). Consumers pass one graph release to
@@ -124,18 +122,9 @@ and advancing pagination. A raw `mode=node_records` response fails closed.
 normalized response receipt. Edge does not synthesize internal CAP rules from
 an unrelated S3 package.
 
-An explicit frozen-node spec verifies its frozen raw-data receipt and, for
-market families, its exchange reference receipt before Edge normalizes
-visibility time. A catalog schema receipt remains part of that frozen
-node/spec identity.
 The materialization request must provide explicit source start and end dates,
 either through the runtime window or feed options, because a source receipt is
 meaningless without a bounded row set.
-
-Transforms that use weekday de-seasonalization must carry the seven finite
-frozen `weekday_centers` in the canonical node spec. A release-array index by
-itself is not reproducible and fails closed. Unresolved schemas, keys, event
-times, receipts, or transform parameters remain adapter errors.
 
 ## Compatibility
 

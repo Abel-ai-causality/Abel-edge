@@ -198,28 +198,6 @@ class AbelClient:
             api_key=api_key,
         )
 
-    def fetch_node_records_page(
-        self,
-        *,
-        node_id: str,
-        start: str | None,
-        end: str | None,
-        limit: int | None,
-        cursor_id: int | None,
-        api_key: str,
-    ) -> dict[str, Any]:
-        """Fetch one exact page and preserve CAP node metadata and cursor facts."""
-
-        return node_records_client.fetch_node_records_page(
-            post_market=self._post_market,
-            node_id=node_id,
-            start=start,
-            end=end,
-            limit=limit,
-            cursor_id=cursor_id,
-            api_key=api_key,
-        )
-
     def _post_cap(
         self,
         *,
