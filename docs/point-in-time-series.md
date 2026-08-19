@@ -62,8 +62,9 @@ registry. It receives the validated `PointInTimeSeriesSpec` in
 `frame.attrs["source_receipt_sha256"]`; Edge compares this receipt with the
 frozen spec before normalization. The built-in CSV adapter hashes the source
 file bytes and accepts only an empty `transforms` list; transformed CSV specs
-fail closed because that adapter does not materialize transforms. The adapter
-must also return the exact
+fail closed because that adapter does not materialize transforms. The Abel CAP
+scalar-node adapter has the same empty-transform restriction. The adapter must
+also return the exact
 `frame.attrs["series_spec_sha256"]` it used for materialization so a cache made
 under another transform or alignment spec cannot be reused silently.
 

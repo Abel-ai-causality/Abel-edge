@@ -5,6 +5,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
+from abel_edge.engine.point_in_time_series import PointInTimeSeriesSpec
 from abel_edge.plugins.abel import (
     compile_cap_node_series_spec,
     prepare_cap_node_series_spec,
@@ -177,6 +178,29 @@ def test_cap_node_series_materializer_rejects_response_receipt_drift(monkeypatch
     )
 
     with pytest.raises(CanonicalNodeDataError, match="source receipt drift"):
+        load_cap_node_series(
+            series_spec=spec,
+            start="2026-05-01",
+            end="2026-05-02",
+            limit=20,
+            config={},
+        )
+
+
+def test_cap_node_series_materializer_rejects_unapplied_transforms(monkeypatch):
+    payload = compile_cap_node_series_spec(
+        node_id=NODE_ID,
+        graph_ref=GRAPH_REF,
+        source_receipt_sha256=cap_node_series_receipt(ROWS, node_id=NODE_ID),
+    ).payload
+    payload["transforms"] = [{"op": "scale", "parameters": {"factor": 2.0}}]
+    spec = PointInTimeSeriesSpec.from_mapping(payload)
+    monkeypatch.setattr(
+        "abel_edge.plugins.abel.cap_node_series.fetch_node_series",
+        lambda **_: pd.DataFrame(ROWS),
+    )
+
+    with pytest.raises(CanonicalNodeDataError, match="does not support series_spec.transforms"):
         load_cap_node_series(
             series_spec=spec,
             start="2026-05-01",

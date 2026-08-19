@@ -23,16 +23,30 @@ def assess_graph_release(*, release, api_key: str, client, ticker: str) -> dict[
         api_key=api_key,
         graph_ref=release.graph_ref,
     )
+    blanket_items = client.markov_blanket(
+        node_id=ticker,
+        limit=20,
+        api_key=api_key,
+        graph_ref=release.graph_ref,
+    )
     provenance = client.graph_provenance()
     identity_reasons = _identity_reasons(release, provenance)
-    routed = _route_parents(parents, canonical=release.is_canonical)
-    unrouted_parent_count = len(parents) - len(routed)
+    parent_routes = _route_parents(parents, canonical=release.is_canonical)
+    blanket_routes = _route_parents(blanket_items, canonical=release.is_canonical)
+    routed = _unique_routes([*parent_routes, *blanket_routes])
+    unrouted_parent_count = len(parents) - len(parent_routes)
+    unrouted_blanket_count = len(blanket_items) - len(blanket_routes)
     discovery_reasons = []
     if not parents:
         discovery_reasons.append("CAP discovery returned no parents")
     if unrouted_parent_count:
         discovery_reasons.append(
             f"{unrouted_parent_count} discovered parent(s) lacked a routable node identity"
+        )
+    blanket_reasons = []
+    if unrouted_blanket_count:
+        blanket_reasons.append(
+            f"{unrouted_blanket_count} Markov-blanket item(s) lacked a routable node identity"
         )
     market_reasons = _probe_market_routes(routed, client=client, api_key=api_key)
     node_reasons, node_details = _probe_node_routes(
@@ -52,10 +66,23 @@ def assess_graph_release(*, release, api_key: str, client, ticker: str) -> dict[
             "parent_count": len(parents),
             "unrouted_parent_count": unrouted_parent_count,
             "market_parent_count": sum(
-                item["driver_ref"]["kind"] == "symbol" for item in routed
+                item["driver_ref"]["kind"] == "symbol" for item in parent_routes
             ),
             "node_id_parent_count": sum(
-                item["driver_ref"]["kind"] == "canonical_node" for item in routed
+                item["driver_ref"]["kind"] == "canonical_node" for item in parent_routes
+            ),
+        },
+        "markov_blanket": {
+            "status": "blocked" if blanket_reasons else "pass",
+            "reasons": blanket_reasons,
+            "item_count": len(blanket_items),
+            "unrouted_item_count": unrouted_blanket_count,
+            "market_item_count": sum(
+                item["driver_ref"]["kind"] == "symbol" for item in blanket_routes
+            ),
+            "node_id_item_count": sum(
+                item["driver_ref"]["kind"] == "canonical_node"
+                for item in blanket_routes
             ),
         },
         "release_identity": _check(identity_reasons, observed=provenance),
@@ -141,6 +168,22 @@ def _route_parents(
             }
         )
     return routed
+
+
+def _unique_routes(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    unique = []
+    seen = set()
+    for item in items:
+        ref = item["driver_ref"]
+        identity = (
+            ref["kind"],
+            ref.get("symbol") or ref.get("node_id"),
+            ref.get("field"),
+        )
+        if identity not in seen:
+            seen.add(identity)
+            unique.append(item)
+    return unique
 
 
 def _probe_market_routes(routed, *, client, api_key: str) -> list[str]:

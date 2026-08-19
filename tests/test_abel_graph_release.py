@@ -280,7 +280,8 @@ def test_graph_release_doctor_blocks_non_scalar_raw_node_records(monkeypatch, tm
                 {"node_id": "JWWCX.price"},
                 {"node_id": "health.openfda.drug.events:event_count#96bc3e82"},
             ]
-
+        def markov_blanket(self, **_kwargs):
+            return []
         def graph_provenance(self):
             return {"graph_id": "abel-main", "graph_version": "CausalNodeV4", "edge_set": "recall"}
 
@@ -346,7 +347,8 @@ def test_graph_release_doctor_accepts_exact_scalar_node_series(monkeypatch, tmp_
                 {"node_id": "000001.SZ.volume"},
                 {"node_id": "health.openfda.drug.events:event_count#96bc3e82"},
             ]
-
+        def markov_blanket(self, **_kwargs):
+            return []
         def graph_provenance(self):
             return {"graph_id": "abel-main", "graph_version": "CausalNodeV4", "edge_set": "recall"}
 

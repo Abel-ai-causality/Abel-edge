@@ -167,6 +167,9 @@ def test_doctor_probes_v3_parent_symbol_routes():
         def discover_parents(self, **_kwargs):
             return [{"node_id": "MSFT.price", "source_rank": 1}]
 
+        def markov_blanket(self, **_kwargs):
+            return []
+
         def graph_provenance(self):
             return {"graph_id": "abel-main", "graph_version": "CausalNodeV3"}
 
@@ -204,6 +207,9 @@ def test_doctor_blocks_discovery_items_without_routable_node_identity():
         def discover_parents(self, **_kwargs):
             return [{"unexpected": "missing-node-id"}]
 
+        def markov_blanket(self, **_kwargs):
+            return []
+
         def graph_provenance(self):
             return {
                 "graph_id": "abel-main",
@@ -221,3 +227,50 @@ def test_doctor_blocks_discovery_items_without_routable_node_identity():
     assert result["status"] == "blocked"
     assert result["checks"]["discovery"]["status"] == "blocked"
     assert result["checks"]["discovery"]["unrouted_parent_count"] == 1
+
+
+def test_doctor_probes_markov_blanket_routes_before_reporting_ready():
+    blanket_node = "health.openfda.drug.events:event_count#96bc3e82"
+
+    class StubClient:
+        def cap_methods(self, *, api_key):
+            return [{"verb": "traverse.parents"}, {"verb": "graph.markov_blanket"}]
+
+        def discover_parents(self, **_kwargs):
+            return [{"node_id": "MSFT.price"}]
+
+        def markov_blanket(self, **_kwargs):
+            return [{"node_id": blanket_node, "roles": ["spouse"]}]
+
+        def graph_provenance(self):
+            return {
+                "graph_id": "abel-main",
+                "graph_version": "CausalNodeV4",
+                "edge_set": "recall",
+            }
+
+        def fetch_bars(self, **_kwargs):
+            return [
+                {
+                    "timestamp": "2026-05-01T00:00:00Z",
+                    "symbol": "MSFT",
+                    "close": 10.0,
+                }
+            ]
+
+        def fetch_node_series(self, **_kwargs):
+            raise ValueError("blanket node route unavailable")
+
+    result = assess_graph_release(
+        release=_v4_release(),
+        api_key="test",
+        client=StubClient(),
+        ticker="AAPL.price",
+    )
+
+    assert result["status"] == "blocked"
+    assert result["checks"]["markov_blanket"]["status"] == "pass"
+    assert result["checks"]["markov_blanket"]["node_id_item_count"] == 1
+    assert "blanket node route unavailable" in result["checks"][
+        "node_id_scalar_series"
+    ]["reasons"][0]

@@ -218,6 +218,12 @@ def materialize_cap_node_series(
 ) -> pd.DataFrame:
     """Fetch and receipt-check one bounded CAP scalar series."""
 
+    if series_spec.payload.get("transforms"):
+        raise CanonicalNodeDataError(
+            "The Abel CAP point-in-time adapter does not support "
+            "series_spec.transforms; use an adapter that materializes the "
+            "declared transforms."
+        )
     rows = (fetcher or fetch_node_series)(
         node_id=node_id,
         start=start,
