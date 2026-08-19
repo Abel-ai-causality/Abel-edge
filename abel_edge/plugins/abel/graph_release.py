@@ -16,6 +16,7 @@ from abel_edge.plugins.abel.credentials import require_api_key
 GRAPH_RELEASE_CONTRACT = "abel-edge.graph-release/v1"
 GRAPH_RELEASE_DOCTOR_CONTRACT = "abel-edge.graph-release-doctor/v1"
 GRAPH_DISCOVERY_CONTRACT = "abel-edge.graph-discovery/v2"
+SUPPORTED_GRAPH_VERSIONS = {"CausalNodeV3", "CausalNodeV4"}
 V4_EDGE_SETS = {"precision", "recall"}
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _TOP_LEVEL_KEYS = {
@@ -86,6 +87,12 @@ class GraphReleaseConfig:
                 )
         graph_ref["graph_id"] = str(graph_ref["graph_id"]).strip()
         graph_ref["graph_version"] = str(graph_ref["graph_version"]).strip()
+        if graph_ref["graph_version"] not in SUPPORTED_GRAPH_VERSIONS:
+            supported = ", ".join(sorted(SUPPORTED_GRAPH_VERSIONS))
+            raise GraphReleaseContractError(
+                "graph release graph_ref.graph_version must be a supported "
+                f"graph_version ({supported})."
+            )
         edge_set = graph_ref.get("edge_set")
         if graph_ref["graph_version"] == "CausalNodeV4":
             normalized_edge_set = (

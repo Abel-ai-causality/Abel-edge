@@ -65,6 +65,31 @@ def test_spec_hash_is_canonical_and_rejects_embedded_credentials():
         PointInTimeSeriesSpec.from_mapping(unsafe)
 
 
+def test_spec_allows_domain_token_fields_but_rejects_explicit_auth_tokens():
+    public_request = _series_spec()
+    public_request["source"]["request"].update(
+        {
+            "token_address": "0x1234",
+            "token_symbol": "ABEL",
+        }
+    )
+
+    spec = PointInTimeSeriesSpec.from_mapping(public_request)
+
+    assert spec.source_request["token_address"] == "0x1234"
+    assert spec.source_request["token_symbol"] == "ABEL"
+
+    unsafe = deepcopy(public_request)
+    unsafe["source"]["request"]["access_token"] = "must-stay-runtime-only"
+    with pytest.raises(PointInTimeSeriesContractError, match="credential"):
+        PointInTimeSeriesSpec.from_mapping(unsafe)
+
+    provider_prefixed = deepcopy(public_request)
+    provider_prefixed["source"]["request"]["cap_api_key"] = "must-stay-runtime-only"
+    with pytest.raises(PointInTimeSeriesContractError, match="credential"):
+        PointInTimeSeriesSpec.from_mapping(provider_prefixed)
+
+
 def test_spec_rejects_non_finite_numbers_before_hashing():
     payload = _series_spec()
     payload["transforms"] = [

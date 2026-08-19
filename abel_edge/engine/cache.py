@@ -149,6 +149,10 @@ def point_in_time_cache_covers_request(
     if requested_end is not None and (cached_end is None or cached_end < requested_end):
         return False
     cached_limit = requested.get("limit")
+    if cached_limit is not None and (
+        cached_start != requested_start or cached_end != requested_end
+    ):
+        return False
     if limit is None:
         if cached_limit is not None:
             return False

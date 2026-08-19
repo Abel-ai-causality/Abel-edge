@@ -29,6 +29,10 @@ from abel_edge.plugins.abel.cap_node_series import (
     materialize_cap_node_series as _materialize_cap_node_series,
     prepare_cap_node_series_spec as prepare_cap_node_series_spec,
 )
+from abel_edge.plugins.abel.canonical_source_window import (
+    filter_visible_frame,
+    resolve_materialization_window,
+)
 from abel_edge.plugins.abel.prices import fetch_bars, fetch_node_series
 
 DEFAULT_DATA_BASE_URL = "https://cap.abel.ai/data-infra"
@@ -45,6 +49,7 @@ def load_canonical_node_series(
     """Fetch, transform, and receipt-check one canonical graph-node series."""
 
     payload = series_spec.payload
+    options = config or {}
     if series_spec.source_adapter != "abel":
         raise CanonicalNodeDataError(
             "Abel canonical materialization requires source.adapter='abel'."
@@ -52,21 +57,33 @@ def load_canonical_node_series(
     request = payload["source"]["request"]
     node_id = str(request["node_id"])
     retrieval_mode = str(request.get("retrieval_mode") or "")
-    resolved_start = start or (config or {}).get("source_start")
-    resolved_end = end or (config or {}).get("source_end")
-    if resolved_start is None or resolved_end is None:
-        raise CanonicalNodeDataError(
-            "Frozen canonical source receipts require explicit start and end dates."
-        )
+    (
+        source_start,
+        source_end,
+        source_limit,
+        visible_start,
+        visible_end,
+    ) = resolve_materialization_window(
+        start=start,
+        end=end,
+        limit=limit,
+        config=options,
+    )
 
     if retrieval_mode == "node_series":
-        return _materialize_cap_node_series(
+        frame = _materialize_cap_node_series(
             series_spec=series_spec,
             node_id=node_id,
-            start=resolved_start,
-            end=resolved_end,
+            start=source_start,
+            end=source_end,
+            limit=source_limit,
+            config=options,
+        )
+        return filter_visible_frame(
+            frame,
+            start=visible_start,
+            end=visible_end,
             limit=limit,
-            config=config or {},
         )
 
     family = str(request["family"])
@@ -88,10 +105,10 @@ def load_canonical_node_series(
             source=source,
             alignment=alignment,
             transform=transform,
-            start=resolved_start,
-            end=resolved_end,
-            limit=limit,
-            config=config or {},
+            start=source_start,
+            end=source_end,
+            limit=source_limit,
+            config=options,
             expected_alignment_receipt=payload["provenance"].get(
                 "alignment_receipt_sha256"
             ),
@@ -102,22 +119,24 @@ def load_canonical_node_series(
             source=source,
             alignment=alignment,
             transform=transform,
-            start=resolved_start,
-            end=resolved_end,
-            limit=limit,
-            config=config or {},
+            start=source_start,
+            end=source_end,
+            limit=source_limit,
+            config=options,
         )
 
-    visible_start = required_date(resolved_start, label="start")
-    visible_end = required_date(resolved_end, label="end")
+    visible_start_date = required_date(visible_start, label="start")
+    visible_end_date = required_date(visible_end, label="end")
     availability_lag = int(payload["availability"].get("lag_days", 0))
     transformed = {
         event_day: value
         for event_day, value in transformed.items()
-        if visible_start
+        if visible_start_date
         <= event_day + timedelta(days=availability_lag)
-        <= visible_end
+        <= visible_end_date
     }
+    if limit is not None:
+        transformed = dict(list(transformed.items())[-int(limit) :])
     actual_receipt = series_receipt(raw_series)
     expected_receipt = payload["provenance"]["source_receipt_sha256"]
     if actual_receipt != expected_receipt:

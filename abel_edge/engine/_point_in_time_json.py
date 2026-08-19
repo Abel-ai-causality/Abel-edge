@@ -8,15 +8,36 @@ from typing import Any, Mapping
 
 from abel_edge.engine.feed_contract import FeedContractError
 
-_CREDENTIAL_KEY_PARTS = {
+_CREDENTIAL_KEYS = {
     "accesskey",
+    "accesstoken",
     "apikey",
+    "authtoken",
     "authorization",
+    "bearertoken",
+    "clientsecret",
     "credential",
+    "credentials",
+    "idtoken",
     "password",
+    "refreshtoken",
     "secret",
     "secretkey",
+    "sessiontoken",
     "token",
+}
+_CREDENTIAL_KEY_SUFFIXES = {
+    "accesskey",
+    "accesstoken",
+    "apikey",
+    "authtoken",
+    "bearertoken",
+    "clientsecret",
+    "idtoken",
+    "privatekey",
+    "refreshtoken",
+    "secretkey",
+    "sessiontoken",
 }
 
 
@@ -33,7 +54,9 @@ def find_credential_path(value: Any, *, prefix: str = "source.request") -> str |
     if isinstance(value, dict):
         for key, child in value.items():
             normalized = re.sub(r"[^a-z0-9]", "", str(key).lower())
-            if any(part in normalized for part in _CREDENTIAL_KEY_PARTS):
+            if normalized in _CREDENTIAL_KEYS or any(
+                normalized.endswith(suffix) for suffix in _CREDENTIAL_KEY_SUFFIXES
+            ):
                 return f"{prefix}.{key}"
             found = find_credential_path(child, prefix=f"{prefix}.{key}")
             if found:

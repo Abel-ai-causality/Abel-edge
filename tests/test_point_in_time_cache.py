@@ -116,3 +116,26 @@ def test_limited_point_in_time_cache_does_not_cover_unlimited_request():
         end="2024-12-31",
         limit=None,
     )
+
+
+def test_limited_point_in_time_cache_does_not_cover_different_bounds():
+    metadata = {
+        "contract": "abel-edge.point-in-time-cache/v1",
+        "series_spec_sha256": "a" * 64,
+        "source_receipt_sha256": "b" * 64,
+        "data_sha256": "c" * 64,
+        "requested_range": {
+            "start": "2024-01-01",
+            "end": "2024-12-31",
+            "limit": 30,
+        },
+    }
+
+    assert not point_in_time_cache_covers_request(
+        metadata,
+        series_spec_sha256="a" * 64,
+        source_receipt_sha256="b" * 64,
+        start="2024-01-01",
+        end="2024-06-30",
+        limit=10,
+    )

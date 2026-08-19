@@ -160,20 +160,27 @@ def _render_markov_blanket(
     lines = ["markov_blanket:"]
     rendered_items = []
     for item in children:
-        rendered_items.append(
-            {
-                "ticker": item.get("ticker", ""),
-                "field": item.get("field", ""),
-                "roles": ["child"],
-            }
-        )
+        rendered = dict(item)
+        rendered["roles"] = item.get("roles") or ["child"]
+        rendered_items.append(rendered)
     rendered_items.extend(blanket_new)
     for item in rendered_items[:20]:
         ticker = str(item.get("ticker", "")).strip()
         field = str(item.get("field", "")).strip()
-        if not ticker or not field:
-            continue
         roles = [str(role).strip() for role in item.get("roles", []) if str(role).strip()]
+        if not ticker or not field:
+            driver_ref = item.get("driver_ref")
+            node_id = str(item.get("node_id") or "").strip()
+            if (
+                isinstance(driver_ref, Mapping)
+                and driver_ref.get("kind") == "canonical_node"
+                and node_id
+            ):
+                lines.append(f"  - node_id: {node_id}")
+                lines.append("    kind: canonical_node")
+                lines.append(f"    family: {item.get('family', 'canonical_node')}")
+                lines.append(f"    roles: [{', '.join(roles)}]")
+            continue
         lines.append(f"  - ticker: {ticker}")
         lines.append(f"    field: {field}")
         lines.append(f"    roles: [{', '.join(roles)}]")
@@ -243,25 +250,12 @@ def _build_discovery_payload(
         key = item["node_id"]
         roles = [str(role).strip() for role in item.get("roles", []) if str(role).strip()]
         if "child" in roles and key not in seen_children:
-            children.append(
-                {
-                    "node_id": item["node_id"],
-                    "ticker": item["ticker"],
-                    "field": item["field"],
-                }
-            )
+            children.append(_role_payload(item, roles=roles, child=True))
             seen_children.add(key)
             continue
         if key in parent_keys or key in seen_blanket:
             continue
-        blanket_new.append(
-            {
-                "node_id": item["node_id"],
-                "ticker": item["ticker"],
-                "field": item["field"],
-                "roles": roles or ["neighbor"],
-            }
-        )
+        blanket_new.append(_role_payload(item, roles=roles, child=False))
         seen_blanket.add(key)
 
     return {
@@ -278,6 +272,28 @@ def _build_discovery_payload(
         "graph_release": release.payload,
         "graph_release_sha256": release.sha256,
     }
+
+
+def _role_payload(
+    item: dict[str, Any],
+    *,
+    roles: list[str],
+    child: bool,
+) -> dict[str, Any]:
+    ticker = str(item.get("ticker") or "").strip()
+    field = str(item.get("field") or "").strip()
+    if ticker and field:
+        payload = {
+            "node_id": item["node_id"],
+            "ticker": ticker,
+            "field": field,
+        }
+        if not child:
+            payload["roles"] = roles or ["neighbor"]
+        return payload
+    payload = dict(item)
+    payload["roles"] = roles or (["child"] if child else ["neighbor"])
+    return payload
 
 
 def _normalize_items(
