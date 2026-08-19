@@ -72,16 +72,16 @@ def assess_graph_release(*, release, api_key: str, client, ticker: str) -> dict[
 
 
 def _identity_reasons(release, provenance: dict[str, Any]) -> list[str]:
-    observed_version = str(provenance.get("graph_version") or "")
     reasons = []
-    if observed_version != release.graph_version:
-        reasons.append(
-            f"expected graph_version={release.graph_version}, "
-            f"observed={observed_version or '<missing>'}"
-        )
-    expected_release = release.graph_ref.get("release_id")
-    if expected_release and str(provenance.get("release_id") or "") != expected_release:
-        reasons.append("configured release_id was not reproduced by CAP")
+    nested_ref = provenance.get("graph_ref")
+    nested_ref = nested_ref if isinstance(nested_ref, dict) else {}
+    for key, expected in release.graph_ref.items():
+        observed = provenance.get(key, nested_ref.get(key))
+        observed_text = str(observed or "")
+        if observed_text != expected:
+            reasons.append(
+                f"expected {key}={expected}, observed={observed_text or '<missing>'}"
+            )
     expected_receipt = release.expected_release_receipt_sha256
     observed_receipt = str(
         provenance.get("release_receipt_sha256")
@@ -146,33 +146,27 @@ def _probe_node_routes(routed, *, client, api_key: str) -> tuple[list[str], list
             continue
         node_id = ref["node_id"]
         try:
-            payload = client.fetch_node_series_page(
+            rows = client.fetch_node_series(
                 node_id=node_id,
                 start=PROBE_START,
                 end=PROBE_END,
-                limit=PROBE_LIMIT,
-                cursor_date=None,
+                limit=None,
                 api_key=api_key,
             )
         except Exception as exc:
             reasons.append(f"{node_id}: node_id route failed: {exc}")
             continue
-        if not isinstance(payload, dict) or payload.get("mode") != "node_series":
-            observed = payload.get("mode") if isinstance(payload, dict) else None
-            reasons.append(
-                f"{node_id}: response is not scalar-series mode "
-                f"(observed {observed or '<missing>'})"
-            )
-            continue
-        node = payload.get("node")
-        rows = payload.get("data") if isinstance(payload, dict) else None
-        if not isinstance(node, dict) or str(node.get("node_id") or "") != node_id:
-            reasons.append(f"{node_id}: response did not preserve the exact node identity")
-            continue
-        feature = str(node.get("feature") or "value").strip()
         if not isinstance(rows, list):
             reasons.append(f"{node_id}: scalar-series response is missing data")
             continue
+        if any(
+            not isinstance(row, dict)
+            or str(row.get("node_id") or "").strip() != node_id
+            for row in rows
+        ):
+            reasons.append(f"{node_id}: response did not preserve the exact node identity")
+            continue
+        feature = "value"
         times = [_event_time(row) for row in rows]
         usable = [time for time in times if time]
         duplicate_count = len(usable) - len(set(usable))

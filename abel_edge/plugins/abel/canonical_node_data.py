@@ -68,6 +68,7 @@ def load_canonical_node_series(
         end=end,
         limit=limit,
         config=options,
+        availability_lag_days=int(payload["availability"].get("lag_days", 0)),
     )
 
     if retrieval_mode == "node_series":

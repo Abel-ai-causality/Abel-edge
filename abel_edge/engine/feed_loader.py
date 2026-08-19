@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import date, datetime
+import re
 from typing import Any
 
 import pandas as pd
@@ -101,7 +103,13 @@ def load_feed_frame(
         assert_point_in_time_adapter_identity(raw, series_spec, name=f"feed '{feed_name}'")
     frame = _normalize_loaded_frame(feed_cfg, raw, assume_utc_for_naive=adapter.assume_utc_for_naive)
     assert_frame_respects_max_data_date(frame, source=f"feed '{feed_name}'")
-    return _apply_time_filters(frame, start=start, end=end, limit=limit)
+    return _apply_time_filters(
+        frame,
+        start=start,
+        end=end,
+        limit=limit,
+        date_only_end_is_inclusive=kind == "point_in_time_series",
+    )
 
 
 def _normalize_loaded_frame(
@@ -139,13 +147,23 @@ def _normalize_loaded_frame(
     raise FeedContractError(f"Unsupported feed kind '{kind}' for feed '{feed_cfg['name']}'.")
 
 
-def _apply_time_filters(frame: pd.DataFrame, *, start=None, end=None, limit: int | None = None):
+def _apply_time_filters(
+    frame: pd.DataFrame,
+    *,
+    start=None,
+    end=None,
+    limit: int | None = None,
+    date_only_end_is_inclusive: bool = False,
+):
     attrs = dict(frame.attrs)
     filtered = frame
     if start is not None:
         filtered = filtered[filtered["timestamp"] >= pd.to_datetime(start, utc=True)]
     if end is not None:
-        filtered = filtered[filtered["timestamp"] <= pd.to_datetime(end, utc=True)]
+        end_timestamp = pd.to_datetime(end, utc=True)
+        if date_only_end_is_inclusive and _is_date_only(end):
+            end_timestamp += pd.Timedelta(days=1) - pd.Timedelta(nanoseconds=1)
+        filtered = filtered[filtered["timestamp"] <= end_timestamp]
     if limit:
         group_cols = ["symbol"] if "symbol" in filtered.columns else None
         if group_cols:
@@ -155,6 +173,16 @@ def _apply_time_filters(frame: pd.DataFrame, *, start=None, end=None, limit: int
     filtered = filtered.reset_index(drop=True)
     filtered.attrs.update(attrs)
     return filtered
+
+
+def _is_date_only(value: Any) -> bool:
+    if isinstance(value, datetime):
+        return False
+    if isinstance(value, date):
+        return True
+    return isinstance(value, str) and bool(
+        re.fullmatch(r"\d{4}-\d{2}-\d{2}", value.strip())
+    )
 
 
 def _request_fields(kind: str, fields: list[str] | None) -> list[str] | None:

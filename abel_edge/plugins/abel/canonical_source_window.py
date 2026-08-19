@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Any
 
 import pandas as pd
@@ -16,6 +17,7 @@ def resolve_materialization_window(
     end,
     limit: int | None,
     config: dict[str, Any],
+    availability_lag_days: int = 0,
 ) -> tuple[Any, Any, int | None, Any, Any]:
     """Separate the frozen receipt window from the runtime-visible window."""
 
@@ -31,8 +33,17 @@ def resolve_materialization_window(
         raise CanonicalNodeDataError(
             "Frozen canonical source receipts require explicit start and end dates."
         )
+    if availability_lag_days < 0:
+        raise CanonicalNodeDataError(
+            "Canonical availability_lag_days must be nonnegative."
+        )
     source_start = frozen_start if frozen_start is not None else visible_start
     source_end = frozen_end if frozen_end is not None else visible_end
+    if frozen_start is None and availability_lag_days:
+        source_start = (
+            required_date(visible_start, label="start")
+            - timedelta(days=availability_lag_days)
+        ).isoformat()
     source_start_date = required_date(source_start, label="source_start")
     source_end_date = required_date(source_end, label="source_end")
     visible_start_date = required_date(visible_start, label="start")
@@ -49,6 +60,8 @@ def resolve_materialization_window(
     if frozen_start is not None:
         raw_source_limit = config.get("source_limit")
         source_limit = int(raw_source_limit) if raw_source_limit is not None else None
+    elif availability_lag_days:
+        source_limit = None
     return source_start, source_end, source_limit, visible_start, visible_end
 
 

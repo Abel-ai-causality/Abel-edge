@@ -282,7 +282,7 @@ def test_graph_release_doctor_blocks_non_scalar_raw_node_records(monkeypatch, tm
             ]
 
         def graph_provenance(self):
-            return {"graph_version": "CausalNodeV4"}
+            return {"graph_id": "abel-main", "graph_version": "CausalNodeV4", "edge_set": "recall"}
 
         def fetch_bars(self, *, symbols, start, end, timeframe, limit, fields, api_key):
             assert symbols == ["JWWCX"]
@@ -295,20 +295,11 @@ def test_graph_release_doctor_blocks_non_scalar_raw_node_records(monkeypatch, tm
                 }
             ]
 
-        def fetch_node_series_page(self, *, node_id, start, end, limit, cursor_date, api_key):
-            return {
-                "mode": "node_records",
-                "node": {
-                    "node_id": node_id,
-                    "source_table": "his_openfda_drug_event_daily",
-                    "feature": "event_count",
-                },
-                "data": [
-                    {"id": 1, "date": "2026-05-01", "event_count": 1},
-                    {"id": 2, "date": "2026-05-01", "event_count": 2},
-                ],
-                "page": {"limit": 100, "max_date": "2026-05-02", "has_more": False},
-            }
+        def fetch_node_series(self, **_kwargs):
+            raise ValueError(
+                "Abel node_id response is not a scalar series; "
+                "expected mode=node_series, observed=node_records."
+            )
 
     monkeypatch.setattr(release_module, "require_api_key", lambda **_: "test")
     monkeypatch.setattr(release_module, "AbelClient", lambda **_: StubClient())
@@ -333,7 +324,9 @@ def test_graph_release_doctor_blocks_non_scalar_raw_node_records(monkeypatch, tm
     assert payload["checks"]["release_identity"]["status"] == "pass"
     assert payload["checks"]["market_symbol_routes"]["status"] == "pass"
     assert payload["checks"]["node_id_scalar_series"]["status"] == "blocked"
-    assert "not scalar-series mode" in payload["checks"]["node_id_scalar_series"]["reasons"][0]
+    assert "expected mode=node_series, observed=node_records" in payload["checks"][
+        "node_id_scalar_series"
+    ]["reasons"][0]
     assert "scalar-series" in payload["summary"]
 
 
@@ -355,7 +348,7 @@ def test_graph_release_doctor_accepts_exact_scalar_node_series(monkeypatch, tmp_
             ]
 
         def graph_provenance(self):
-            return {"graph_version": "CausalNodeV4"}
+            return {"graph_id": "abel-main", "graph_version": "CausalNodeV4", "edge_set": "recall"}
 
         def fetch_bars(self, *, symbols, start, end, timeframe, limit, fields, api_key):
             return [
@@ -366,16 +359,19 @@ def test_graph_release_doctor_accepts_exact_scalar_node_series(monkeypatch, tmp_
                 }
             ]
 
-        def fetch_node_series_page(self, *, node_id, start, end, limit, cursor_date, api_key):
-            return {
-                "mode": "node_series",
-                "node": {"node_id": node_id, "feature": "event_count"},
-                "data": [
-                    {"timestamp": "2026-05-01T00:00:00Z", "value": 21.0},
-                    {"timestamp": "2026-05-02T00:00:00Z", "value": 25.0},
-                ],
-                "page": {"limit": 100, "max_date": "2026-05-02", "has_more": False},
-            }
+        def fetch_node_series(self, *, node_id, start, end, limit, api_key):
+            return [
+                {
+                    "node_id": node_id,
+                    "timestamp": "2026-05-01T00:00:00Z",
+                    "value": 21.0,
+                },
+                {
+                    "node_id": node_id,
+                    "timestamp": "2026-05-02T00:00:00Z",
+                    "value": 25.0,
+                },
+            ]
 
     monkeypatch.setattr(release_module, "require_api_key", lambda **_: "test")
     monkeypatch.setattr(release_module, "AbelClient", lambda **_: StubClient())
