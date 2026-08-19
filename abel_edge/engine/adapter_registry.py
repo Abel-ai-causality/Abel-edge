@@ -114,6 +114,17 @@ class CSVDataFeedAdapter:
         path_value = request.options.get("path")
         if request.series_spec is not None:
             path_value = request.series_spec.source_request.get("path") or path_value
+        if request.kind == "point_in_time_series":
+            if request.series_spec is None:
+                raise AdapterRegistryError(
+                    f"Feed '{request.feed_name}' is missing its point-in-time series spec."
+                )
+            if request.series_spec.payload.get("transforms"):
+                raise AdapterRegistryError(
+                    "The CSV point-in-time adapter does not support "
+                    "series_spec.transforms; use an adapter that materializes the "
+                    "declared transforms."
+                )
         if not path_value:
             raise AdapterRegistryError(
                 f"Feed '{request.feed_name}' uses adapter='csv' but is missing 'path'."

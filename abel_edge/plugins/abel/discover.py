@@ -250,12 +250,16 @@ def _build_discovery_payload(
         key = item["node_id"]
         roles = [str(role).strip() for role in item.get("roles", []) if str(role).strip()]
         if "child" in roles and key not in seen_children:
-            children.append(_role_payload(item, roles=roles, child=True))
+            children.append(
+                _role_payload(item, roles=roles, child=True, preserve_typed=release.is_canonical)
+            )
             seen_children.add(key)
             continue
         if key in parent_keys or key in seen_blanket:
             continue
-        blanket_new.append(_role_payload(item, roles=roles, child=False))
+        blanket_new.append(
+            _role_payload(item, roles=roles, child=False, preserve_typed=release.is_canonical)
+        )
         seen_blanket.add(key)
 
     return {
@@ -279,7 +283,12 @@ def _role_payload(
     *,
     roles: list[str],
     child: bool,
+    preserve_typed: bool,
 ) -> dict[str, Any]:
+    if preserve_typed:
+        payload = dict(item)
+        payload["roles"] = roles or (["child"] if child else ["neighbor"])
+        return payload
     ticker = str(item.get("ticker") or "").strip()
     field = str(item.get("field") or "").strip()
     if ticker and field:

@@ -61,7 +61,9 @@ registry. It receives the validated `PointInTimeSeriesSpec` in
 `schema`. It must also put the actual source-data SHA-256 in
 `frame.attrs["source_receipt_sha256"]`; Edge compares this receipt with the
 frozen spec before normalization. The built-in CSV adapter hashes the source
-file bytes. The adapter must also return the exact
+file bytes and accepts only an empty `transforms` list; transformed CSV specs
+fail closed because that adapter does not materialize transforms. The adapter
+must also return the exact
 `frame.attrs["series_spec_sha256"]` it used for materialization so a cache made
 under another transform or alignment spec cannot be reused silently.
 

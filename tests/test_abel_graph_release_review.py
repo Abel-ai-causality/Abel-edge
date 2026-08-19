@@ -67,3 +67,42 @@ def test_v4_markov_blanket_preserves_typed_canonical_nodes(monkeypatch):
     assert canonical_child in rendered
     assert "kind: canonical_node" in rendered
     assert "roles: [spouse]" in rendered
+
+
+def test_v4_markov_blanket_preserves_typed_market_nodes(monkeypatch):
+    release = GraphReleaseConfig.from_mapping(_v4_release())
+
+    class StubClient:
+        def markov_blanket(self, **_kwargs):
+            return [
+                {"node_id": "MSFT.price", "roles": ["child"]},
+                {"node_id": "NVDA.volume", "roles": ["spouse"]},
+            ]
+
+    monkeypatch.setattr(discover_module, "require_api_key", lambda **_: "test")
+    payload = discover_module.discover_graph_payload(
+        "AAPL.price",
+        mode="mb",
+        graph_release=release,
+        client=StubClient(),
+    )
+
+    child = payload["children"][0]
+    assert child["roles"] == ["child"]
+    assert child["source_rank"] == 1
+    assert child["driver_ref"] == {
+        "kind": "symbol",
+        "graph_node_id": "MSFT.price",
+        "symbol": "MSFT",
+        "field": "close",
+        "adjustment": "provider_symbol_mode",
+        "timezone": "UTC",
+    }
+    assert child["driver_ref_sha256"]
+
+    blanket_item = payload["blanket_new"][0]
+    assert blanket_item["roles"] == ["spouse"]
+    assert blanket_item["source_rank"] == 2
+    assert blanket_item["driver_ref"]["kind"] == "symbol"
+    assert blanket_item["driver_ref"]["field"] == "volume"
+    assert blanket_item["driver_ref_sha256"]

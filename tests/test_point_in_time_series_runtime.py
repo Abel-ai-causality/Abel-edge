@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 
 from abel_edge.config import load_config
-from abel_edge.engine.adapter_registry import register_adapter
+from abel_edge.engine.adapter_registry import AdapterRegistryError, register_adapter
 from abel_edge.engine.base import StrategyEngine
 from abel_edge.engine.feed_contract import FeedAlignmentError, FeedDateGuardError
 from abel_edge.engine.feed_loader import load_feed_frame
@@ -111,6 +111,28 @@ strategies:
     feed = context["_feeds"]["macro"]
     assert feed["adapter"] == "csv"
     assert feed["series_spec"]["series_id"] == "macro.cpi.us"
+
+
+def test_csv_point_in_time_rejects_unapplied_transforms(tmp_path):
+    data_path = tmp_path / "macro.csv"
+    data_path.write_text(
+        "observed_at,released_at,reading\n"
+        "2024-01-01T00:00:00Z,2024-01-02T05:00:00Z,100\n",
+        encoding="utf-8",
+    )
+    spec = _series_spec(path=str(data_path).replace("\\", "/"))
+    spec["transforms"] = [{"op": "scale", "parameters": {"factor": 2.0}}]
+
+    with pytest.raises(AdapterRegistryError, match="does not support series_spec.transforms"):
+        load_feed_frame(
+            {
+                "name": "macro",
+                "kind": "point_in_time_series",
+                "adapter": "csv",
+                "profile": "daily",
+                "series_spec": spec,
+            }
+        )
 
 
 def test_legacy_series_config_remains_supported(tmp_path):
