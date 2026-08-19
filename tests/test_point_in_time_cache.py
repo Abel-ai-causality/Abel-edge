@@ -3,12 +3,18 @@
 from __future__ import annotations
 
 import importlib
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
+from threading import Barrier, Lock
+from time import sleep
 
 import pandas as pd
 
 from abel_edge.engine.adapter_registry import AbelDataFeedAdapter, FeedLoadRequest
-from abel_edge.engine.cache import point_in_time_cache_covers_request
+from abel_edge.engine.cache import (
+    point_in_time_cache_covers_request,
+    point_in_time_cache_entry,
+)
 from abel_edge.plugins.abel import compile_cap_node_series_spec
 
 
@@ -192,3 +198,89 @@ def test_limited_point_in_time_cache_does_not_cover_different_bounds():
         end="2024-06-30",
         limit=10,
     )
+
+
+def test_point_in_time_cache_shortens_disk_name_without_shortening_identity(tmp_path):
+    spec_hash = "a" * 64
+    entry = point_in_time_cache_entry(
+        adapter="abel",
+        series_spec_sha256=spec_hash,
+        cache_root=tmp_path,
+    )
+
+    assert entry.key == spec_hash
+    assert entry.symbol == spec_hash
+    assert entry.data_path.name == f"{'a' * 40}.csv"
+    assert entry.meta_path.name == f"{'a' * 40}.json"
+
+
+def test_concurrent_point_in_time_cache_writes_are_atomic(tmp_path, monkeypatch):
+    point_spec = _point_spec()
+    load_barrier = Barrier(2)
+    write_state_lock = Lock()
+    active_writes = 0
+    peak_writes = 0
+
+    class CanonicalModule:
+        @staticmethod
+        def load_cap_node_series(**kwargs):
+            load_barrier.wait(timeout=5)
+            frame = pd.DataFrame(
+                {
+                    "event_time": ["2024-01-02T05:00:00Z"],
+                    "timestamp": ["2024-01-02T05:00:00Z"],
+                    "value": [0.25],
+                }
+            )
+            frame.attrs["source_receipt_sha256"] = "e" * 64
+            frame.attrs["series_spec_sha256"] = point_spec.sha256
+            return frame
+
+    real_import = importlib.import_module
+
+    def fake_import(name):
+        if name == "abel_edge.plugins.abel.cap_node_series":
+            return CanonicalModule()
+        return real_import(name)
+
+    real_to_csv = pd.DataFrame.to_csv
+
+    def synchronized_to_csv(self, path_or_buf=None, *args, **kwargs):
+        nonlocal active_writes, peak_writes
+        if not str(path_or_buf).endswith(".partial"):
+            return real_to_csv(self, path_or_buf, *args, **kwargs)
+        with write_state_lock:
+            active_writes += 1
+            peak_writes = max(peak_writes, active_writes)
+        try:
+            sleep(0.05)
+            return real_to_csv(self, path_or_buf, *args, **kwargs)
+        finally:
+            with write_state_lock:
+                active_writes -= 1
+
+    monkeypatch.setattr(importlib, "import_module", fake_import)
+    monkeypatch.setattr(pd.DataFrame, "to_csv", synchronized_to_csv)
+    request = FeedLoadRequest(
+        adapter="abel",
+        kind="point_in_time_series",
+        symbol=None,
+        field=None,
+        timeframe=None,
+        start="2024-01-01",
+        end="2024-01-31",
+        limit=None,
+        profile="daily",
+        options={"cache_root": str(tmp_path)},
+        strategy_id="demo",
+        feed_name="graph_parent_01",
+        series_spec=point_spec,
+    )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        frames = list(pool.map(lambda _: AbelDataFeedAdapter().load(request), range(2)))
+
+    pd.testing.assert_frame_equal(frames[0], frames[1])
+    assert peak_writes == 1
+    cached = AbelDataFeedAdapter().load(request)
+    pd.testing.assert_frame_equal(frames[0], cached)

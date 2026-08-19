@@ -12,6 +12,8 @@ from typing import Any, Iterable
 
 import pandas as pd
 
+from abel_edge.engine.cache_lock import exclusive_cache_lock
+
 CACHE_ROOT_ENV = "ABEL_EDGE_CACHE_ROOT"
 DEFAULT_CACHE_ROOT = Path(".cache/market_data")
 _OPTION_EXCLUDE = {
@@ -92,14 +94,15 @@ def point_in_time_cache_entry(
     root = resolve_cache_root(cache_root)
     entry_root = root / normalized_adapter / "point_in_time_series"
     entry_root.mkdir(parents=True, exist_ok=True)
+    disk_key = spec_hash[:40]
     return CacheEntry(
         root=root,
         key=spec_hash,
         adapter=normalized_adapter,
         symbol=spec_hash,
         timeframe="point_in_time_series",
-        data_path=entry_root / f"{spec_hash}.csv",
-        meta_path=entry_root / f"{spec_hash}.json",
+        data_path=entry_root / f"{disk_key}.csv",
+        meta_path=entry_root / f"{disk_key}.json",
     )
 
 
@@ -281,33 +284,34 @@ def write_cached_point_in_time_series(
             "Cached point-in-time series requires value and event_time or timestamp."
         )
     entry.data_path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = entry.data_path.with_suffix(".csv.partial")
-    frame.to_csv(temporary, index=False, lineterminator="\n")
-    temporary.replace(entry.data_path)
-    metadata = {
-        "contract": "abel-edge.point-in-time-cache/v1",
-        "adapter": entry.adapter,
-        "cache_key": entry.key,
-        "data_path": str(entry.data_path),
-        "metadata_path": str(entry.meta_path),
-        "data_sha256": _file_sha256(entry.data_path),
-        "series_spec_sha256": series_spec_sha256,
-        "source_receipt_sha256": source_receipt_sha256,
-        "requested_range": {
-            "start": _format_request_bound(requested_start),
-            "end": _format_request_bound(requested_end),
-            "limit": int(requested_limit) if requested_limit is not None else None,
-        },
-        "row_count": int(len(frame)),
-        "columns": list(frame.columns),
-        "updated_at": datetime.now(tz=UTC).isoformat(),
-    }
-    metadata_temporary = entry.meta_path.with_suffix(".json.partial")
-    metadata_temporary.write_text(
-        json.dumps(metadata, indent=2, sort_keys=True),
-        encoding="utf-8",
-    )
-    metadata_temporary.replace(entry.meta_path)
+    with exclusive_cache_lock(entry.data_path):
+        temporary = entry.data_path.parent / f".data-{os.urandom(8).hex()}.partial"
+        frame.to_csv(temporary, index=False, lineterminator="\n")
+        temporary.replace(entry.data_path)
+        metadata = {
+            "contract": "abel-edge.point-in-time-cache/v1",
+            "adapter": entry.adapter,
+            "cache_key": entry.key,
+            "data_path": str(entry.data_path),
+            "metadata_path": str(entry.meta_path),
+            "data_sha256": _file_sha256(entry.data_path),
+            "series_spec_sha256": series_spec_sha256,
+            "source_receipt_sha256": source_receipt_sha256,
+            "requested_range": {
+                "start": _format_request_bound(requested_start),
+                "end": _format_request_bound(requested_end),
+                "limit": int(requested_limit) if requested_limit is not None else None,
+            },
+            "row_count": int(len(frame)),
+            "columns": list(frame.columns),
+            "updated_at": datetime.now(tz=UTC).isoformat(),
+        }
+        metadata_temporary = entry.meta_path.parent / f".meta-{os.urandom(8).hex()}.partial"
+        metadata_temporary.write_text(
+            json.dumps(metadata, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+        metadata_temporary.replace(entry.meta_path)
     return metadata
 
 
@@ -392,8 +396,3 @@ def _as_timestamp(value: object | None) -> pd.Timestamp | None:
         return pd.to_datetime(value, utc=True)
     except (TypeError, ValueError):
         return None
-
-
-def _is_recent_enough(value: pd.Timestamp) -> bool:
-    today = pd.Timestamp.now(tz=UTC).normalize()
-    return value.normalize() >= today - pd.Timedelta(days=3)
