@@ -23,14 +23,23 @@ def assess_graph_release(*, release, api_key: str, client, ticker: str) -> dict[
         api_key=api_key,
         graph_ref=release.graph_ref,
     )
+    parents_provenance = client.graph_provenance()
     blanket_items = client.markov_blanket(
         node_id=ticker,
         limit=20,
         api_key=api_key,
         graph_ref=release.graph_ref,
     )
-    provenance = client.graph_provenance()
-    identity_reasons = _identity_reasons(release, provenance)
+    blanket_provenance = client.graph_provenance()
+    observed_provenance = {
+        "parents": parents_provenance,
+        "markov_blanket": blanket_provenance,
+    }
+    identity_reasons = [
+        f"{route}: {reason}"
+        for route, provenance in observed_provenance.items()
+        for reason in _identity_reasons(release, provenance)
+    ]
     parent_routes = _route_parents(parents, canonical=release.is_canonical)
     blanket_routes = _route_parents(blanket_items, canonical=release.is_canonical)
     routed = _unique_routes([*parent_routes, *blanket_routes])
@@ -85,7 +94,7 @@ def assess_graph_release(*, release, api_key: str, client, ticker: str) -> dict[
                 for item in blanket_routes
             ),
         },
-        "release_identity": _check(identity_reasons, observed=provenance),
+        "release_identity": _check(identity_reasons, observed=observed_provenance),
         "market_symbol_routes": _check(market_reasons),
         "node_id_scalar_series": _check(node_reasons, details=node_details),
     }

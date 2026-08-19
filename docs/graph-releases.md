@@ -48,6 +48,9 @@ The command exits zero only when CAP reproduces the configured graph identity
 and every parent and Markov-blanket item in the probe is usable through its
 typed data route. V3 items are probed through their adjusted symbol routes; V4
 items are probed through either adjusted symbol or exact canonical-node routes.
+The parents and Markov-blanket CAP calls each carry and independently verify
+their own provenance; a later successful call cannot hide an earlier selector
+mismatch.
 Use a ticker with a non-market parent when testing arbitrary-family V4 support;
 a market-only target proves only the adjusted symbol route.
 

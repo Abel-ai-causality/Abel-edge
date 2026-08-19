@@ -274,3 +274,54 @@ def test_doctor_probes_markov_blanket_routes_before_reporting_ready():
     assert "blanket node route unavailable" in result["checks"][
         "node_id_scalar_series"
     ]["reasons"][0]
+
+
+def test_doctor_verifies_each_discovery_call_provenance_independently():
+    class StubClient:
+        def __init__(self):
+            self.provenance = {}
+
+        def cap_methods(self, *, api_key):
+            return [{"verb": "traverse.parents"}, {"verb": "graph.markov_blanket"}]
+
+        def discover_parents(self, **_kwargs):
+            self.provenance = {
+                "graph_id": "wrong-graph",
+                "graph_version": "CausalNodeV4",
+                "edge_set": "recall",
+            }
+            return [{"node_id": "MSFT.price"}]
+
+        def markov_blanket(self, **_kwargs):
+            self.provenance = {
+                "graph_id": "abel-main",
+                "graph_version": "CausalNodeV4",
+                "edge_set": "recall",
+            }
+            return []
+
+        def graph_provenance(self):
+            return dict(self.provenance)
+
+        def fetch_bars(self, **_kwargs):
+            return [
+                {
+                    "timestamp": "2026-05-01T00:00:00Z",
+                    "symbol": "MSFT",
+                    "close": 10.0,
+                }
+            ]
+
+    result = assess_graph_release(
+        release=_v4_release(),
+        api_key="test",
+        client=StubClient(),
+        ticker="AAPL.price",
+    )
+
+    assert result["status"] == "blocked"
+    identity = result["checks"]["release_identity"]
+    assert identity["status"] == "blocked"
+    assert any("parents:" in reason and "wrong-graph" in reason for reason in identity["reasons"])
+    assert identity["observed"]["parents"]["graph_id"] == "wrong-graph"
+    assert identity["observed"]["markov_blanket"]["graph_id"] == "abel-main"
