@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+from dataclasses import replace
 
 import pandas as pd
 
@@ -69,6 +70,82 @@ def test_builtin_abel_adapter_reuses_exact_point_in_time_cache(tmp_path, monkeyp
     pd.testing.assert_frame_equal(first, second)
     assert second.attrs["source_receipt_sha256"] == "e" * 64
     assert second.attrs["series_spec_sha256"] == point_spec.sha256
+
+
+def test_builtin_abel_adapter_separates_frozen_source_windows(tmp_path, monkeypatch):
+    point_spec = _point_spec()
+    calls = []
+
+    class CanonicalModule:
+        @staticmethod
+        def load_cap_node_series(**kwargs):
+            calls.append(kwargs["config"])
+            frame = pd.DataFrame(
+                {
+                    "event_time": ["2024-01-02T05:00:00Z"],
+                    "timestamp": ["2024-01-02T05:00:00Z"],
+                    "value": [0.25],
+                }
+            )
+            frame.attrs["source_receipt_sha256"] = "e" * 64
+            frame.attrs["series_spec_sha256"] = point_spec.sha256
+            return frame
+
+    real_import = importlib.import_module
+
+    def fake_import(name):
+        if name == "abel_edge.plugins.abel.cap_node_series":
+            return CanonicalModule()
+        return real_import(name)
+
+    monkeypatch.setattr(importlib, "import_module", fake_import)
+    base = FeedLoadRequest(
+        adapter="abel",
+        kind="point_in_time_series",
+        symbol=None,
+        field=None,
+        timeframe=None,
+        start=None,
+        end=None,
+        limit=None,
+        profile="daily",
+        options={
+            "cache_root": str(tmp_path),
+            "source_start": "2024-01-01",
+            "source_end": "2024-12-31",
+            "source_limit": 30,
+        },
+        strategy_id="demo",
+        feed_name="graph_parent_01",
+        series_spec=point_spec,
+    )
+    narrower_window = replace(
+        base,
+        options={
+            **base.options,
+            "source_end": "2024-06-30",
+        },
+    )
+    different_limit = replace(
+        narrower_window,
+        options={
+            **narrower_window.options,
+            "source_limit": 10,
+        },
+    )
+
+    adapter = AbelDataFeedAdapter()
+    adapter.load(base)
+    adapter.load(narrower_window)
+    adapter.load(different_limit)
+
+    assert len(calls) == 3
+    assert [call["source_end"] for call in calls] == [
+        "2024-12-31",
+        "2024-06-30",
+        "2024-06-30",
+    ]
+    assert [call["source_limit"] for call in calls] == [30, 30, 10]
 
 
 def test_limited_point_in_time_cache_does_not_cover_unlimited_request():

@@ -141,6 +141,10 @@ The descriptor `node.node_id` must equal the requested ID. `timestamp` is the
 earliest UTC visibility time; `event_time` is optional and defaults to that
 timestamp. Edge rejects raw `mode=node_records`, non-finite values, duplicate
 timestamps, non-UTC timestamps, identity drift, and stalled date cursors.
+For a bounded scalar-node request, Edge follows the complete date-cursor chain,
+sorts the validated observations, and only then applies `limit` as a trailing-row
+limit. A limited request therefore returns the most recent observations in the
+window rather than the first page.
 
 ## Runtime Expectations
 
@@ -169,11 +173,12 @@ the canonical node's key/filter and aggregation inside its V4 registry. Edge
 does not choose sum, mean, or last-row semantics on the consumer's behalf.
 
 When a point-in-time feed declares an explicit `cache_root`, Edge caches the
-receipt-checked response by the complete `series_spec` SHA-256. Reuse requires
-the same spec, source receipt, and a cached requested range covering the new
-request. The cache file is content-hashed; a missing, edited, or drifted entry
-is ignored and the canonical source is read again. Node IDs are never used as
-filesystem paths.
+receipt-checked response by the complete `series_spec` SHA-256 plus any frozen
+`source_start`, `source_end`, and `source_limit` options. Reuse requires the same
+spec, frozen source window, source receipt, and a cached requested range covering
+the new request. The cache file is content-hashed; a missing, edited, or drifted
+entry is ignored and the canonical source is read again. Node IDs are never used
+as filesystem paths.
 
 ## Why This Contract
 

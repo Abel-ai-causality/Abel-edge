@@ -87,25 +87,25 @@ def test_fetch_node_series_partitions_cross_year_requests_and_resets_date_cursor
         },
         {
             "node_id": "catalog:test#1",
-            "shape": "series",
-            "start": "2025-01-01",
-            "end": "2025-12-31",
-            "limit": 9,
+                "shape": "series",
+                "start": "2025-01-01",
+                "end": "2025-12-31",
+                "limit": 10,
         },
         {
             "node_id": "catalog:test#1",
-            "shape": "series",
-            "start": "2025-01-01",
-            "end": "2025-12-31",
-            "limit": 8,
+                "shape": "series",
+                "start": "2025-01-01",
+                "end": "2025-12-31",
+                "limit": 10,
             "cursor_date": "2025-01-01",
         },
         {
             "node_id": "catalog:test#1",
-            "shape": "series",
-            "start": "2026-01-01",
-            "end": "2026-01-02",
-            "limit": 7,
+                "shape": "series",
+                "start": "2026-01-01",
+                "end": "2026-01-02",
+                "limit": 10,
         },
     ]
 
@@ -185,13 +185,66 @@ def test_fetch_node_series_follows_cap_date_cursor_pages_without_losing_rows():
         },
         {
             "node_id": "catalog:test#1",
-            "start": "2026-05-01",
-            "end": "2026-05-10",
-            "limit": 1,
+                "start": "2026-05-01",
+                "end": "2026-05-10",
+                "limit": 2,
             "cursor_date": "2026-05-01",
             "shape": "series",
         },
     ]
+
+
+def test_limited_node_series_returns_trailing_rows_after_full_pagination():
+    class StubSession:
+        def __init__(self):
+            self.bodies = []
+
+        def post(self, _url, *, json=None, headers=None, timeout=None):
+            self.bodies.append(json)
+            cursor = (json or {}).get("cursor_date")
+            if cursor is None:
+                return StubResponse(days=(1, 2), has_more=True)
+            return StubResponse(days=(3, 4), has_more=False)
+
+    class StubResponse:
+        status_code = 200
+        headers = {}
+
+        def __init__(self, *, days, has_more):
+            self.days = days
+            self.has_more = has_more
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "mode": "node_series",
+                "node": {"node_id": "catalog:test#1"},
+                "data": [
+                    {
+                        "timestamp": f"2026-05-{day:02d}T00:00:00Z",
+                        "value": float(day),
+                    }
+                    for day in self.days
+                ],
+                "page": {
+                    "has_more": self.has_more,
+                    "max_date": f"2026-05-{max(self.days):02d}",
+                },
+            }
+
+    session = StubSession()
+    rows = AbelClient(session=session).fetch_node_series(
+        node_id="catalog:test#1",
+        start="2026-05-01",
+        end="2026-05-10",
+        limit=2,
+        api_key="abel_test",
+    )
+
+    assert [row["value"] for row in rows] == [3.0, 4.0]
+    assert len(session.bodies) == 2
 
 
 def test_fetch_node_series_rejects_duplicate_utc_timestamps_across_pages():

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -175,7 +176,7 @@ class AbelDataFeedAdapter:
             if cache_root:
                 entry = point_in_time_cache_entry(
                     adapter=request.adapter,
-                    series_spec_sha256=request.series_spec.sha256,
+                    series_spec_sha256=_point_in_time_cache_identity(request),
                     cache_root=cache_root,
                 )
                 metadata = load_cached_metadata(entry)
@@ -329,6 +330,32 @@ def _csv_series_frame(df: pd.DataFrame, request: FeedLoadRequest) -> pd.DataFram
     if "symbol" not in frame.columns and request.symbol:
         frame["symbol"] = request.symbol
     return frame
+
+
+def _point_in_time_cache_identity(request: FeedLoadRequest) -> str:
+    if request.series_spec is None:
+        raise AdapterRegistryError(
+            f"Feed '{request.feed_name}' is missing its point-in-time series spec."
+        )
+    source_window = {
+        "start": str(request.options["source_start"])
+        if request.options.get("source_start") is not None
+        else None,
+        "end": str(request.options["source_end"])
+        if request.options.get("source_end") is not None
+        else None,
+        "limit": int(request.options["source_limit"])
+        if request.options.get("source_limit") is not None
+        else None,
+    }
+    if not any(value is not None for value in source_window.values()):
+        return request.series_spec.sha256
+    payload = {
+        "series_spec_sha256": request.series_spec.sha256,
+        "source_window": source_window,
+    }
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(canonical).hexdigest()
 
 
 def _max_cache_age_seconds(options: dict[str, object]) -> float | None:

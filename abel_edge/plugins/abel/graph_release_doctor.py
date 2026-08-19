@@ -6,6 +6,7 @@ import math
 from datetime import datetime, timezone
 from typing import Any
 
+from abel_edge.plugins.abel.client import split_public_node_id
 from abel_edge.plugins.abel.graph_driver import classify_v4_driver
 from abel_edge.plugins.abel.graph_release import GRAPH_RELEASE_DOCTOR_CONTRACT
 
@@ -24,7 +25,15 @@ def assess_graph_release(*, release, api_key: str, client, ticker: str) -> dict[
     )
     provenance = client.graph_provenance()
     identity_reasons = _identity_reasons(release, provenance)
-    routed = _route_parents(parents) if release.is_canonical else []
+    routed = _route_parents(parents, canonical=release.is_canonical)
+    unrouted_parent_count = len(parents) - len(routed)
+    discovery_reasons = []
+    if not parents:
+        discovery_reasons.append("CAP discovery returned no parents")
+    if unrouted_parent_count:
+        discovery_reasons.append(
+            f"{unrouted_parent_count} discovered parent(s) lacked a routable node identity"
+        )
     market_reasons = _probe_market_routes(routed, client=client, api_key=api_key)
     node_reasons, node_details = _probe_node_routes(
         routed,
@@ -38,8 +47,10 @@ def assess_graph_release(*, release, api_key: str, client, ticker: str) -> dict[
             "method_count": len(methods),
         },
         "discovery": {
-            "status": "pass" if parents else "blocked",
+            "status": "blocked" if discovery_reasons else "pass",
+            "reasons": discovery_reasons,
             "parent_count": len(parents),
+            "unrouted_parent_count": unrouted_parent_count,
             "market_parent_count": sum(
                 item["driver_ref"]["kind"] == "symbol" for item in routed
             ),
@@ -93,18 +104,42 @@ def _identity_reasons(release, provenance: dict[str, Any]) -> list[str]:
     return reasons
 
 
-def _route_parents(parents: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _route_parents(
+    parents: list[dict[str, Any]],
+    *,
+    canonical: bool,
+) -> list[dict[str, Any]]:
     routed = []
     for index, item in enumerate(parents, start=1):
         node_id = _node_id(item)
-        if node_id:
+        if not node_id:
+            continue
+        source_rank = int(item.get("source_rank", index))
+        if canonical:
             routed.append(
                 classify_v4_driver(
                     item,
                     node_id=node_id,
-                    source_rank=int(item.get("source_rank", index)),
+                    source_rank=source_rank,
                 )
             )
+            continue
+        try:
+            symbol, graph_field = split_public_node_id(node_id)
+        except ValueError:
+            continue
+        field = "close" if graph_field == "price" else graph_field
+        routed.append(
+            {
+                "node_id": node_id,
+                "source_rank": source_rank,
+                "driver_ref": {
+                    "kind": "symbol",
+                    "symbol": symbol,
+                    "field": field,
+                },
+            }
+        )
     return routed
 
 

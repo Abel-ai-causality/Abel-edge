@@ -23,24 +23,26 @@ def fetch_all_node_series(
     """Fetch and validate one exact CAP scalar series across cursor pages."""
 
     canonical_id = _node_id(node_id)
-    remaining = int(limit or 200_000)
-    if remaining <= 0:
+    requested_limit = int(limit) if limit is not None else None
+    if requested_limit is not None and requested_limit <= 0:
         raise ValueError("Canonical node series limit must be positive.")
+    page_limit = min(requested_limit or 1_000, 1_000)
+    remaining_capacity = 200_000
     rows: list[dict[str, Any]] = []
     timestamps: set[str] = set()
     for window_start, window_end in _calendar_year_windows(start, end):
         cursor_date: str | None = None
-        while remaining > 0:
+        while remaining_capacity > 0:
             payload = fetch_page(
                 node_id=canonical_id,
                 start=window_start,
                 end=window_end,
-                limit=min(remaining, 1_000),
+                limit=min(page_limit, remaining_capacity),
                 cursor_date=cursor_date,
                 api_key=api_key,
             )
             page_rows = _scalar_series_rows(payload, node_id=canonical_id)
-            for row in page_rows[:remaining]:
+            for row in page_rows[:remaining_capacity]:
                 timestamp = _utc_timestamp(row.get("timestamp"), label="timestamp")
                 if timestamp in timestamps:
                     raise ValueError(
@@ -57,22 +59,18 @@ def fetch_all_node_series(
                 normalized["node_id"] = canonical_id
                 normalized["value"] = float(normalized["value"])
                 rows.append(normalized)
-            consumed = min(len(page_rows), remaining)
-            remaining -= consumed
+            remaining_capacity -= min(len(page_rows), remaining_capacity)
             page = payload.get("page")
-            if (
-                not isinstance(page, dict)
-                or not page.get("has_more")
-                or remaining <= 0
-            ):
+            if not isinstance(page, dict) or not page.get("has_more"):
                 break
+            if remaining_capacity <= 0:
+                raise ValueError("Abel node scalar series exceeded the 200000-row safety cap.")
             next_cursor = _date_cursor(page.get("max_date"))
             if cursor_date is not None and next_cursor <= _date_cursor(cursor_date):
                 raise ValueError("Abel node_id date cursor did not advance.")
             cursor_date = next_cursor.isoformat()
-        if remaining <= 0:
-            break
-    return sorted(rows, key=lambda row: row["timestamp"])
+    ordered = sorted(rows, key=lambda row: row["timestamp"])
+    return ordered[-requested_limit:] if requested_limit is not None else ordered
 
 
 def fetch_node_series_page(

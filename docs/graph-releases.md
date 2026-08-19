@@ -46,8 +46,10 @@ abel-edge graph-release doctor \
 
 The command exits zero only when CAP reproduces the configured graph identity
 and every discovered driver in the probe is usable through its typed data
-route. Use a ticker with a non-market parent when testing arbitrary-family V4
-support; a market-only target proves only the adjusted symbol route.
+route. V3 parents are probed through their adjusted symbol routes; V4 parents
+are probed through either adjusted symbol or exact canonical-node routes. Use a
+ticker with a non-market parent when testing arbitrary-family V4 support; a
+market-only target proves only the adjusted symbol route.
 
 Select the same release during discovery:
 

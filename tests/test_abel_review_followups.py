@@ -8,9 +8,11 @@ import pandas as pd
 
 from abel_edge.engine.feed_loader import load_feed_frame
 from abel_edge.plugins.abel.graph_release import GraphReleaseConfig
+from abel_edge.plugins.abel.graph_release import default_v3_graph_release
 from abel_edge.plugins.abel.graph_release_doctor import (
     _identity_reasons,
     _probe_node_routes,
+    assess_graph_release,
 )
 from abel_edge.plugins.abel.node_records_client import fetch_all_node_series
 
@@ -152,3 +154,70 @@ def test_doctor_uses_paginated_node_series_path_and_rejects_stalled_cursor():
     assert client.calls == [None, "2026-05-01"]
     assert details == []
     assert any("date cursor did not advance" in reason for reason in reasons)
+
+
+def test_doctor_probes_v3_parent_symbol_routes():
+    class StubClient:
+        def __init__(self):
+            self.bar_calls = []
+
+        def cap_methods(self, *, api_key):
+            return [{"verb": "traverse.parents"}]
+
+        def discover_parents(self, **_kwargs):
+            return [{"node_id": "MSFT.price", "source_rank": 1}]
+
+        def graph_provenance(self):
+            return {"graph_id": "abel-main", "graph_version": "CausalNodeV3"}
+
+        def fetch_bars(self, **kwargs):
+            self.bar_calls.append(kwargs)
+            return [
+                {
+                    "timestamp": "2026-05-01T00:00:00Z",
+                    "symbol": "MSFT",
+                    "close": 10.0,
+                }
+            ]
+
+    client = StubClient()
+
+    result = assess_graph_release(
+        release=default_v3_graph_release(),
+        api_key="test",
+        client=client,
+        ticker="AAPL.price",
+    )
+
+    assert result["status"] == "ready"
+    assert result["checks"]["discovery"]["market_parent_count"] == 1
+    assert len(client.bar_calls) == 1
+    assert client.bar_calls[0]["symbols"] == ["MSFT"]
+    assert client.bar_calls[0]["fields"] == ["close"]
+
+
+def test_doctor_blocks_discovery_items_without_routable_node_identity():
+    class StubClient:
+        def cap_methods(self, *, api_key):
+            return [{"verb": "traverse.parents"}]
+
+        def discover_parents(self, **_kwargs):
+            return [{"unexpected": "missing-node-id"}]
+
+        def graph_provenance(self):
+            return {
+                "graph_id": "abel-main",
+                "graph_version": "CausalNodeV4",
+                "edge_set": "recall",
+            }
+
+    result = assess_graph_release(
+        release=_v4_release(),
+        api_key="test",
+        client=StubClient(),
+        ticker="AAPL.price",
+    )
+
+    assert result["status"] == "blocked"
+    assert result["checks"]["discovery"]["status"] == "blocked"
+    assert result["checks"]["discovery"]["unrouted_parent_count"] == 1
