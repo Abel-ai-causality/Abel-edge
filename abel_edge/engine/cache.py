@@ -134,7 +134,7 @@ def point_in_time_cache_covers_request(
     end: object | None,
     limit: int | None,
 ) -> bool:
-    if metadata.get("contract") != "abel-edge.point-in-time-cache/v1":
+    if metadata.get("contract") != "abel-edge.point-in-time-cache/v2":
         return False
     if metadata.get("series_spec_sha256") != series_spec_sha256:
         return False
@@ -289,7 +289,7 @@ def write_cached_point_in_time_series(
         frame.to_csv(temporary, index=False, lineterminator="\n")
         temporary.replace(entry.data_path)
         metadata = {
-            "contract": "abel-edge.point-in-time-cache/v1",
+            "contract": "abel-edge.point-in-time-cache/v2",
             "adapter": entry.adapter,
             "cache_key": entry.key,
             "data_path": str(entry.data_path),
@@ -298,8 +298,8 @@ def write_cached_point_in_time_series(
             "series_spec_sha256": series_spec_sha256,
             "source_receipt_sha256": source_receipt_sha256,
             "requested_range": {
-                "start": _format_request_bound(requested_start),
-                "end": _format_request_bound(requested_end),
+                "start": _format_request_bound(requested_start, exact=True),
+                "end": _format_request_bound(requested_end, exact=True),
                 "limit": int(requested_limit) if requested_limit is not None else None,
             },
             "row_count": int(len(frame)),
@@ -382,11 +382,11 @@ def _file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _format_request_bound(value: object | None) -> str | None:
+def _format_request_bound(value: object | None, *, exact: bool = False) -> str | None:
     timestamp = _as_timestamp(value)
     if timestamp is None:
         return None
-    return timestamp.date().isoformat()
+    return timestamp.isoformat() if exact else timestamp.date().isoformat()
 
 
 def _as_timestamp(value: object | None) -> pd.Timestamp | None:

@@ -14,6 +14,7 @@ from abel_edge.engine.adapter_registry import AbelDataFeedAdapter, FeedLoadReque
 from abel_edge.engine.cache import (
     point_in_time_cache_covers_request,
     point_in_time_cache_entry,
+    write_cached_point_in_time_series,
 )
 from abel_edge.plugins.abel import compile_cap_node_series_spec
 
@@ -197,6 +198,75 @@ def test_limited_point_in_time_cache_does_not_cover_different_bounds():
         start="2024-01-01",
         end="2024-06-30",
         limit=10,
+    )
+
+
+def test_point_in_time_cache_preserves_intraday_request_bounds(tmp_path):
+    spec_hash = "a" * 64
+    receipt_hash = "b" * 64
+    entry = point_in_time_cache_entry(
+        adapter="abel",
+        series_spec_sha256=spec_hash,
+        cache_root=tmp_path,
+    )
+    metadata = write_cached_point_in_time_series(
+        entry,
+        pd.DataFrame(
+            {
+                "event_time": ["2026-05-01T12:00:00Z"],
+                "value": [1.0],
+            }
+        ),
+        series_spec_sha256=spec_hash,
+        source_receipt_sha256=receipt_hash,
+        requested_start="2026-05-01T12:00:00Z",
+        requested_end="2026-05-01T18:00:00Z",
+        requested_limit=None,
+    )
+
+    assert metadata["requested_range"] == {
+        "start": "2026-05-01T12:00:00+00:00",
+        "end": "2026-05-01T18:00:00+00:00",
+        "limit": None,
+    }
+    assert not point_in_time_cache_covers_request(
+        metadata,
+        series_spec_sha256=spec_hash,
+        source_receipt_sha256=receipt_hash,
+        start="2026-05-01T06:00:00Z",
+        end="2026-05-01T18:00:00Z",
+        limit=None,
+    )
+    assert not point_in_time_cache_covers_request(
+        metadata,
+        series_spec_sha256=spec_hash,
+        source_receipt_sha256=receipt_hash,
+        start="2026-05-01T12:00:00Z",
+        end="2026-05-01T20:00:00Z",
+        limit=None,
+    )
+
+
+def test_point_in_time_cache_rejects_legacy_day_granularity_metadata():
+    metadata = {
+        "contract": "abel-edge.point-in-time-cache/v1",
+        "series_spec_sha256": "a" * 64,
+        "source_receipt_sha256": "b" * 64,
+        "data_sha256": "c" * 64,
+        "requested_range": {
+            "start": "2026-05-01",
+            "end": "2026-05-02",
+            "limit": None,
+        },
+    }
+
+    assert not point_in_time_cache_covers_request(
+        metadata,
+        series_spec_sha256="a" * 64,
+        source_receipt_sha256="b" * 64,
+        start="2026-05-01T06:00:00Z",
+        end="2026-05-01T12:00:00Z",
+        limit=None,
     )
 
 
