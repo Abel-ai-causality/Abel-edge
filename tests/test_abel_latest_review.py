@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from abel_edge.plugins.abel import discover as discover_module
+from abel_edge.plugins.abel import node_records_client
 from abel_edge.plugins.abel.graph_release import (
     GraphReleaseConfig,
     GraphReleaseContractError,
@@ -124,3 +125,37 @@ def test_doctor_rejects_market_rows_without_utc_time_in_probe_window(timestamp):
 
     assert result["status"] == "blocked"
     assert result["checks"]["market_symbol_routes"]["status"] == "blocked"
+
+
+def test_node_series_rejects_capacity_exhaustion_before_later_year(monkeypatch):
+    monkeypatch.setattr(node_records_client, "MAX_NODE_SERIES_ROWS", 2, raising=False)
+    calls = []
+
+    def fetch_page(**kwargs):
+        calls.append(kwargs)
+        year = str(kwargs["start"])[:4]
+        days = (30, 31) if year == "2025" else (1,)
+        return {
+            "mode": "node_series",
+            "node": {"node_id": "catalog:test#1"},
+            "data": [
+                {
+                    "timestamp": f"{year}-{'12' if year == '2025' else '01'}-{day:02d}T00:00:00Z",
+                    "value": float(day),
+                }
+                for day in days
+            ],
+            "page": {"has_more": False},
+        }
+
+    with pytest.raises(ValueError, match="safety cap"):
+        node_records_client.fetch_all_node_series(
+            fetch_page=fetch_page,
+            node_id="catalog:test#1",
+            start="2025-12-30",
+            end="2026-01-02",
+            limit=None,
+            api_key="abel_test",
+        )
+
+    assert len(calls) == 1

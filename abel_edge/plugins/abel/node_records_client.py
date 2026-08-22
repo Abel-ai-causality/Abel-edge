@@ -9,6 +9,7 @@ from typing import Any, Callable
 
 NODE_SERIES_MODE = "node_series"
 NODE_SERIES_SHAPE = "series"
+MAX_NODE_SERIES_ROWS = 200_000
 
 
 def fetch_all_node_series(
@@ -27,10 +28,12 @@ def fetch_all_node_series(
     if requested_limit is not None and requested_limit <= 0:
         raise ValueError("Canonical node series limit must be positive.")
     page_limit = min(requested_limit or 1_000, 1_000)
-    remaining_capacity = 200_000
+    remaining_capacity = MAX_NODE_SERIES_ROWS
     rows: list[dict[str, Any]] = []
     timestamps: set[str] = set()
     for window_start, window_end in _calendar_year_windows(start, end):
+        if remaining_capacity <= 0:
+            raise ValueError("Abel node scalar series exceeded the 200000-row safety cap.")
         cursor_date: str | None = None
         while remaining_capacity > 0:
             payload = fetch_page(
