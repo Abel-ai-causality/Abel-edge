@@ -3,6 +3,7 @@
 import pytest
 
 from abel_edge.plugins.abel.client import AbelClient
+from abel_edge.plugins.abel.node_records_client import fetch_all_node_series
 
 
 def test_fetch_node_series_partitions_cross_year_requests_and_resets_date_cursor():
@@ -22,7 +23,7 @@ def test_fetch_node_series_partitions_cross_year_requests_and_resets_date_cursor
                     has_more=True,
                 )
             dates = {
-                "2024-12-30": ("2024-12-31", "2025-01-01T00:00:00Z"),
+                "2024-12-30": ("2024-12-31", "2024-12-31T00:00:00Z"),
                 "2025-01-01": ("2025-01-02", "2025-01-03T00:00:00Z"),
                 "2026-01-01": ("2026-01-01", "2026-01-02T00:00:00Z"),
             }
@@ -72,7 +73,7 @@ def test_fetch_node_series_partitions_cross_year_requests_and_resets_date_cursor
     )
 
     assert [row["timestamp"] for row in rows] == [
-        "2025-01-01T00:00:00Z",
+        "2024-12-31T00:00:00Z",
         "2025-01-02T00:00:00Z",
         "2025-01-03T00:00:00Z",
         "2026-01-02T00:00:00Z",
@@ -332,5 +333,29 @@ def test_fetch_node_series_rejects_stalled_cap_date_cursor():
             start="2026-05-01",
             end="2026-05-10",
             limit=3,
+            api_key="abel_test",
+        )
+
+
+@pytest.mark.parametrize(
+    "timestamp",
+    ["2026-04-30T23:59:59Z", "2026-05-11T00:00:00Z"],
+)
+def test_fetch_node_series_rejects_rows_outside_active_window(timestamp):
+    def fetch_page(**_kwargs):
+        return {
+            "mode": "node_series",
+            "node": {"node_id": "catalog:test#1"},
+            "data": [{"timestamp": timestamp, "value": 1.0}],
+            "page": {"has_more": False},
+        }
+
+    with pytest.raises(ValueError, match="outside requested window"):
+        fetch_all_node_series(
+            fetch_page=fetch_page,
+            node_id="catalog:test#1",
+            start="2026-05-01",
+            end="2026-05-10",
+            limit=None,
             api_key="abel_test",
         )

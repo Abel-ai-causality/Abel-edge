@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Callable
 
 
@@ -44,6 +44,15 @@ def fetch_all_node_series(
             page_rows = _scalar_series_rows(payload, node_id=canonical_id)
             for row in page_rows[:remaining_capacity]:
                 timestamp = _utc_timestamp(row.get("timestamp"), label="timestamp")
+                if not _timestamp_in_window(
+                    timestamp,
+                    start=window_start,
+                    end=window_end,
+                ):
+                    raise ValueError(
+                        f"Abel node scalar series timestamp {timestamp} is outside "
+                        f"requested window {window_start}..{window_end}."
+                    )
                 if timestamp in timestamps:
                     raise ValueError(
                         f"Abel node scalar series has duplicate UTC timestamp {timestamp}."
@@ -183,6 +192,29 @@ def _finite(value: Any) -> bool:
         return math.isfinite(float(value))
     except (TypeError, ValueError):
         return False
+
+
+def _timestamp_in_window(value: str, *, start: Any, end: Any) -> bool:
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    lower, _ = _request_bound(start, upper=False)
+    upper, upper_exclusive = _request_bound(end, upper=True)
+    if lower is not None and parsed < lower:
+        return False
+    if upper is None:
+        return True
+    return parsed < upper if upper_exclusive else parsed <= upper
+
+
+def _request_bound(value: Any, *, upper: bool) -> tuple[datetime | None, bool]:
+    if value is None:
+        return None, False
+    text = str(_serialize_timestamp(value) or "").strip()
+    request_date = _request_date(text)
+    if request_date is not None and len(text) == 10:
+        bound = datetime.combine(request_date, datetime.min.time(), tzinfo=timezone.utc)
+        return (bound + timedelta(days=1), True) if upper else (bound, False)
+    timestamp = _utc_timestamp(value, label="window bound")
+    return datetime.fromisoformat(timestamp.replace("Z", "+00:00")), False
 
 
 def _utc_timestamp(value: Any, *, label: str) -> str:
