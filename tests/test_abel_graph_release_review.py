@@ -45,6 +45,9 @@ def test_v4_markov_blanket_preserves_typed_canonical_nodes(monkeypatch):
                 {"node_id": canonical_child, "roles": ["child"]},
             ]
 
+        def graph_provenance(self):
+            return release.graph_ref
+
     monkeypatch.setattr(discover_module, "require_api_key", lambda **_: "test")
     payload = discover_module.discover_graph_payload(
         "AAPL.price",
@@ -78,6 +81,9 @@ def test_v4_markov_blanket_preserves_typed_market_nodes(monkeypatch):
                 {"node_id": "MSFT.price", "roles": ["child"]},
                 {"node_id": "NVDA.volume", "roles": ["spouse"]},
             ]
+
+        def graph_provenance(self):
+            return release.graph_ref
 
     monkeypatch.setattr(discover_module, "require_api_key", lambda **_: "test")
     payload = discover_module.discover_graph_payload(

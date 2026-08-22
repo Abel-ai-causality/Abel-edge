@@ -9,8 +9,8 @@ import pandas as pd
 from abel_edge.engine.feed_loader import load_feed_frame
 from abel_edge.plugins.abel.graph_release import GraphReleaseConfig
 from abel_edge.plugins.abel.graph_release import default_v3_graph_release
+from abel_edge.plugins.abel.graph_provenance import graph_provenance_reasons
 from abel_edge.plugins.abel.graph_release_doctor import (
-    _identity_reasons,
     _probe_node_routes,
     assess_graph_release,
 )
@@ -37,7 +37,7 @@ def _v4_release() -> GraphReleaseConfig:
 def test_doctor_verifies_every_configured_graph_selector():
     release = _v4_release()
 
-    mismatched = _identity_reasons(
+    mismatched = graph_provenance_reasons(
         release,
         {
             "graph_id": "another-graph",
@@ -45,7 +45,7 @@ def test_doctor_verifies_every_configured_graph_selector():
             "edge_set": "precision",
         },
     )
-    missing = _identity_reasons(
+    missing = graph_provenance_reasons(
         release,
         {
             "graph_id": "abel-main",

@@ -8,6 +8,7 @@ from typing import Any
 
 from abel_edge.plugins.abel.client import split_public_node_id
 from abel_edge.plugins.abel.graph_driver import classify_v4_driver
+from abel_edge.plugins.abel.graph_provenance import graph_provenance_reasons
 from abel_edge.plugins.abel.graph_release import GRAPH_RELEASE_DOCTOR_CONTRACT
 
 PROBE_START = "2026-05-01"
@@ -38,7 +39,7 @@ def assess_graph_release(*, release, api_key: str, client, ticker: str) -> dict[
     identity_reasons = [
         f"{route}: {reason}"
         for route, provenance in observed_provenance.items()
-        for reason in _identity_reasons(release, provenance)
+        for reason in graph_provenance_reasons(release, provenance)
     ]
     parent_routes = _route_parents(parents, canonical=release.is_canonical)
     blanket_routes = _route_parents(blanket_items, canonical=release.is_canonical)
@@ -116,28 +117,6 @@ def assess_graph_release(*, release, api_key: str, client, ticker: str) -> dict[
         "checks": checks,
         "blocked_checks": blocked,
     }
-
-
-def _identity_reasons(release, provenance: dict[str, Any]) -> list[str]:
-    reasons = []
-    nested_ref = provenance.get("graph_ref")
-    nested_ref = nested_ref if isinstance(nested_ref, dict) else {}
-    for key, expected in release.graph_ref.items():
-        observed = provenance.get(key, nested_ref.get(key))
-        observed_text = str(observed or "")
-        if observed_text != expected:
-            reasons.append(
-                f"expected {key}={expected}, observed={observed_text or '<missing>'}"
-            )
-    expected_receipt = release.expected_release_receipt_sha256
-    observed_receipt = str(
-        provenance.get("release_receipt_sha256")
-        or provenance.get("release_sha256")
-        or ""
-    )
-    if expected_receipt and observed_receipt != expected_receipt:
-        reasons.append("configured release receipt was not reproduced by CAP")
-    return reasons
 
 
 def _route_parents(
@@ -296,7 +275,8 @@ def _has_finite_market_row(rows: Any, field: str, symbol: str) -> bool:
     return isinstance(rows, list) and any(
         isinstance(row, dict)
         and str(row.get("symbol") or "").strip().upper() == expected_symbol
-        and row.get("timestamp")
+        and (event_time := _event_time(row))
+        and PROBE_START <= event_time[:10] <= PROBE_END
         and _finite(row.get(field))
         for row in rows
     )

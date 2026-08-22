@@ -15,6 +15,7 @@ from abel_edge.plugins.abel.graph_release import (
     resolve_graph_release,
 )
 from abel_edge.plugins.abel.graph_driver import classify_v4_driver
+from abel_edge.plugins.abel.graph_provenance import require_graph_provenance
 
 
 def discover_graph_nodes(
@@ -219,6 +220,7 @@ def _discover_mode_items(
             api_key=api_key,
             release=release,
         )
+        require_graph_provenance(client, release, route="parents")
         return _normalize_items(raw_items, release=release)
     if mode == "mb":
         raw_items = _call_client_discovery(
@@ -228,6 +230,7 @@ def _discover_mode_items(
             api_key=api_key,
             release=release,
         )
+        require_graph_provenance(client, release, route="markov_blanket")
         return _normalize_items(raw_items, release=release)
     raise ValueError(f"Unsupported mode '{mode}'.")
 

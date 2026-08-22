@@ -85,6 +85,10 @@ def test_discover_wrapper_uses_env_path_for_cap_base_url(monkeypatch, tmp_path):
 
     def fake_discover_parents(self, *, node_id, limit, api_key):
         observed["cap_base_url"] = self.cap_base_url
+        self._last_cap_provenance = {
+            "graph_id": "abel-main",
+            "graph_version": "CausalNodeV3",
+        }
         return [{"node_id": "BTCUSD.price"}]
 
     monkeypatch.setattr(AbelClient, "discover_parents", fake_discover_parents)

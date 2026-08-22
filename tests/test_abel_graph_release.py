@@ -166,9 +166,7 @@ def test_v4_discovery_expands_a_plain_ticker_to_public_price_target():
 
 def test_v4_discovery_routes_market_nodes_through_adjusted_symbol_mode(monkeypatch):
     from abel_edge.plugins.abel import discover as discover_module
-
     release = GraphReleaseConfig.from_mapping(_v4_release())
-
     class StubClient:
         def discover_parents(self, *, node_id, limit, api_key, graph_ref):
             assert node_id == "AAPL.price"
@@ -180,6 +178,8 @@ def test_v4_discovery_routes_market_nodes_through_adjusted_symbol_mode(monkeypat
                 {"node_id": "000001.SZ.volume"},
             ]
 
+        def graph_provenance(self):
+            return release.graph_ref
     monkeypatch.setattr(discover_module, "require_api_key", lambda **_: "test")
     payload = discover_module.discover_graph_payload(
         "AAPL.price",
@@ -187,7 +187,6 @@ def test_v4_discovery_routes_market_nodes_through_adjusted_symbol_mode(monkeypat
         graph_release=release,
         client=StubClient(),
     )
-
     assert [item["driver_ref"] for item in payload["parents"]] == [
         {
             "kind": "symbol",
@@ -238,6 +237,9 @@ def test_v4_discovery_preserves_arbitrary_node_identity(monkeypatch):
                     "source_rank": 7,
                 }
             ]
+
+        def graph_provenance(self):
+            return release.graph_ref
 
     monkeypatch.setattr(discover_module, "require_api_key", lambda **_: "test")
     payload = discover_module.discover_graph_payload(
