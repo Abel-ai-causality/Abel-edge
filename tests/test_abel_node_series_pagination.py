@@ -23,7 +23,7 @@ def test_fetch_node_series_partitions_cross_year_requests_and_resets_date_cursor
                     has_more=True,
                 )
             dates = {
-                "2024-12-30": ("2024-12-31", "2024-12-31T00:00:00Z"),
+                "2024-12-30": ("2024-12-31", "2025-01-01T00:00:00Z"),
                 "2025-01-01": ("2025-01-02", "2025-01-03T00:00:00Z"),
                 "2026-01-01": ("2026-01-01", "2026-01-02T00:00:00Z"),
             }
@@ -73,7 +73,7 @@ def test_fetch_node_series_partitions_cross_year_requests_and_resets_date_cursor
     )
 
     assert [row["timestamp"] for row in rows] == [
-        "2024-12-31T00:00:00Z",
+        "2025-01-01T00:00:00Z",
         "2025-01-02T00:00:00Z",
         "2025-01-03T00:00:00Z",
         "2026-01-02T00:00:00Z",
@@ -351,6 +351,32 @@ def test_fetch_node_series_rejects_rows_outside_active_window(timestamp):
         }
 
     with pytest.raises(ValueError, match="outside requested window"):
+        fetch_all_node_series(
+            fetch_page=fetch_page,
+            node_id="catalog:test#1",
+            start="2026-05-01",
+            end="2026-05-10",
+            limit=None,
+            api_key="abel_test",
+        )
+
+
+def test_fetch_node_series_rejects_source_dates_outside_active_window():
+    def fetch_page(**_kwargs):
+        return {
+            "mode": "node_series",
+            "node": {"node_id": "catalog:test#1"},
+            "data": [
+                {
+                    "date": "2026-04-30T00:00:00Z",
+                    "timestamp": "2026-05-02T00:00:00Z",
+                    "value": 1.0,
+                }
+            ],
+            "page": {"has_more": False},
+        }
+
+    with pytest.raises(ValueError, match="source date .* outside requested window"):
         fetch_all_node_series(
             fetch_page=fetch_page,
             node_id="catalog:test#1",

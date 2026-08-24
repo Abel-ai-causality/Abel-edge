@@ -47,7 +47,20 @@ def fetch_all_node_series(
             page_rows = _scalar_series_rows(payload, node_id=canonical_id)
             for row in page_rows[:remaining_capacity]:
                 timestamp = _utc_timestamp(row.get("timestamp"), label="timestamp")
-                if not _timestamp_in_window(
+                source_date = row.get("date")
+                if source_date is not None:
+                    normalized_source_date = _source_date(source_date)
+                    if not _source_date_in_window(
+                        normalized_source_date,
+                        start=window_start,
+                        end=window_end,
+                    ):
+                        raise ValueError(
+                            "Abel node scalar series source date "
+                            f"{normalized_source_date.isoformat()} is outside requested "
+                            f"window {window_start}..{window_end}."
+                        )
+                elif not _timestamp_in_window(
                     timestamp,
                     start=window_start,
                     end=window_end,
@@ -206,6 +219,21 @@ def _timestamp_in_window(value: str, *, start: Any, end: Any) -> bool:
     if upper is None:
         return True
     return parsed < upper if upper_exclusive else parsed <= upper
+
+
+def _source_date(value: Any) -> date:
+    parsed = _request_date(value)
+    if parsed is None:
+        raise ValueError("Abel node scalar series source date must be an ISO date.")
+    return parsed
+
+
+def _source_date_in_window(value: date, *, start: Any, end: Any) -> bool:
+    lower = _request_date(start)
+    upper = _request_date(end)
+    if lower is not None and value < lower:
+        return False
+    return upper is None or value <= upper
 
 
 def _request_bound(value: Any, *, upper: bool) -> tuple[datetime | None, bool]:

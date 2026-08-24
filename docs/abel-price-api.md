@@ -141,6 +141,9 @@ The descriptor `node.node_id` must equal the requested ID. `timestamp` is the
 earliest UTC visibility time; `event_time` is optional and defaults to that
 timestamp. Edge rejects raw `mode=node_records`, non-finite values, duplicate
 timestamps, non-UTC timestamps, identity drift, and stalled date cursors.
+Calendar-year transport windows are validated against each row's source
+`date`; a valid availability lag may place `timestamp` in the following
+calendar year without moving the source observation outside its request.
 For a bounded scalar-node request, Edge follows the complete date-cursor chain,
 sorts the validated observations, and only then applies `limit` as a trailing-row
 limit. A limited request therefore returns the most recent observations in the
