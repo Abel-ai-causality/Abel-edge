@@ -55,6 +55,30 @@ def test_cache_rejects_partial_history_without_available_start():
     assert not cache_covers_request(metadata, start="2020-01-01", end=None)
 
 
+def test_cache_covers_partial_history_end_when_request_boundary_was_probed():
+    metadata = {
+        "available_range": {"start": "2020-01-01", "end": "2020-01-15"},
+        "requested_range": {"start": "2020-01-01", "end": "2020-02-01"},
+    }
+
+    assert cache_covers_request(metadata, start="2020-01-01", end="2020-02-01")
+    assert cache_covers_request(metadata, start="2020-01-01", end="2020-01-31")
+    assert not cache_covers_request(metadata, start="2020-01-01", end="2020-02-02")
+
+
+def test_cache_rejects_partial_history_without_available_end():
+    metadata = {
+        "available_range": {"start": "2020-01-01", "end": None},
+        "requested_range": {"start": "2020-01-01", "end": "2020-02-01"},
+    }
+
+    assert not cache_covers_request(
+        metadata,
+        start="2020-01-01",
+        end="2020-02-01",
+    )
+
+
 def test_cache_with_open_end_does_not_require_recent_available_end():
     metadata = {
         "available_range": {"start": "2020-01-01", "end": "2024-01-01"},

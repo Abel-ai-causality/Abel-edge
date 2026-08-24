@@ -211,18 +211,20 @@ def cache_covers_request(
             return False
     available_start = _as_timestamp((metadata.get("available_range") or {}).get("start"))
     available_end = _as_timestamp((metadata.get("available_range") or {}).get("end"))
-    requested_start = _as_timestamp(start)
-    requested_end = _as_timestamp(end)
+    requested_start, requested_end = _as_timestamp(start), _as_timestamp(end)
     cached_request = metadata.get("requested_range") or {}
     cached_requested_start = _as_timestamp(cached_request.get("start"))
+    cached_requested_end = _as_timestamp(cached_request.get("end"))
     if requested_start is not None:
         if available_start is None:
             return False
         if available_start > requested_start:
             if cached_requested_start is None or cached_requested_start > requested_start:
                 return False
-    if requested_end is not None and (available_end is None or available_end < requested_end):
-        return False
+    if requested_end is not None:
+        end_was_probed = cached_requested_end is not None and cached_requested_end >= requested_end
+        if available_end is None or (available_end < requested_end and not end_was_probed):
+            return False
     if limit is not None:
         try:
             requested_limit = int(limit)
