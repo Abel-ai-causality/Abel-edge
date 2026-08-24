@@ -48,9 +48,13 @@ The command exits zero only when CAP reproduces the configured graph identity
 and every parent and Markov-blanket item in the probe is usable through its
 typed data route. V3 items are probed through their adjusted symbol routes; V4
 items are probed through either adjusted symbol or exact canonical-node routes.
-The parents and Markov-blanket CAP calls each carry and independently verify
-their own provenance; a later successful call cannot hide an earlier selector
-mismatch.
+The parents and Markov-blanket CAP calls each carry the complete frozen
+`graph_ref` and independently verify their response provenance; a later
+successful call cannot hide an earlier mismatch. CAP must reproduce
+`graph_version`. `graph_id` and `edge_set` are request-bound selectors: when
+CAP echoes either field it must match, while their absence is accepted because
+the current CAP response exposes only graph version. An explicit `release_id`
+or `expected_release_receipt_sha256` remains a required response assertion.
 Use a ticker with a non-market parent when testing arbitrary-family V4 support;
 a market-only target proves only the adjusted symbol route.
 Market probes require a finite value on a response row whose normalized symbol

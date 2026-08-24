@@ -9,6 +9,8 @@ from abel_edge.plugins.abel.graph_release import (
     GraphReleaseContractError,
 )
 
+REQUEST_BOUND_SELECTORS = {"graph_id", "edge_set"}
+
 
 def graph_provenance_reasons(
     release: GraphReleaseConfig,
@@ -20,6 +22,8 @@ def graph_provenance_reasons(
     for key, expected in release.graph_ref.items():
         observed = provenance.get(key, nested_ref.get(key))
         observed_text = str(observed or "")
+        if key in REQUEST_BOUND_SELECTORS and not observed_text:
+            continue
         if observed_text != expected:
             reasons.append(
                 f"expected {key}={expected}, observed={observed_text or '<missing>'}"

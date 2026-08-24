@@ -34,7 +34,7 @@ def _v4_release() -> GraphReleaseConfig:
     )
 
 
-def test_doctor_verifies_every_configured_graph_selector():
+def test_doctor_verifies_required_and_echoed_graph_provenance():
     release = _v4_release()
 
     mismatched = graph_provenance_reasons(
@@ -48,14 +48,18 @@ def test_doctor_verifies_every_configured_graph_selector():
     missing = graph_provenance_reasons(
         release,
         {
-            "graph_id": "abel-main",
             "graph_version": "CausalNodeV4",
         },
     )
+    missing_version = graph_provenance_reasons(release, {})
 
     assert any("graph_id" in reason and "another-graph" in reason for reason in mismatched)
     assert any("edge_set" in reason and "precision" in reason for reason in mismatched)
-    assert any("edge_set" in reason and "<missing>" in reason for reason in missing)
+    assert missing == []
+    assert any(
+        "graph_version" in reason and "<missing>" in reason
+        for reason in missing_version
+    )
 
 
 def test_point_in_time_date_only_end_includes_the_whole_utc_day(tmp_path):

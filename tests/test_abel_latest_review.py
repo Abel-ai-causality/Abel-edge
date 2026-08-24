@@ -35,6 +35,39 @@ def _provenance(graph_id: str = "abel-main") -> dict[str, str]:
     }
 
 
+def test_discover_accepts_cap_v4_graph_version_only_provenance(monkeypatch):
+    release = _v4_release()
+
+    class StubClient:
+        def __init__(self):
+            self.requested_graph_ref = None
+
+        def discover_parents(self, *, node_id, limit, api_key, graph_ref):
+            self.requested_graph_ref = graph_ref
+            return [{"node_id": "MSFT.price"}]
+
+        def graph_provenance(self):
+            return {
+                "algorithm": "postgres.causal_edge_v4",
+                "cap_spec_version": "0.2.2",
+                "graph_version": "CausalNodeV4",
+                "server_name": "abel-graph-computer",
+            }
+
+    client = StubClient()
+    monkeypatch.setattr(discover_module, "require_api_key", lambda **_: "test")
+
+    payload = discover_module.discover_graph_payload(
+        "AAPL.price",
+        mode="parents",
+        graph_release=release,
+        client=client,
+    )
+
+    assert client.requested_graph_ref == release.graph_ref
+    assert [item["node_id"] for item in payload["parents"]] == ["MSFT.price"]
+
+
 @pytest.mark.parametrize("wrong_route", ["parents", "markov_blanket"])
 def test_discover_validates_each_cap_call_provenance_immediately(
     monkeypatch, wrong_route
@@ -82,6 +115,29 @@ def test_discover_rejects_release_receipt_mismatch(monkeypatch):
     monkeypatch.setattr(discover_module, "require_api_key", lambda **_: "test")
 
     with pytest.raises(GraphReleaseContractError, match="receipt"):
+        discover_module.discover_graph_payload(
+            "AAPL.price",
+            mode="parents",
+            graph_release=release,
+            client=StubClient(),
+        )
+
+
+def test_discover_requires_explicit_release_id_to_be_reproduced(monkeypatch):
+    release_payload = _v4_release().payload
+    release_payload["graph_ref"]["release_id"] = "v4-release-20260824"
+    release = GraphReleaseConfig.from_mapping(release_payload)
+
+    class StubClient:
+        def discover_parents(self, **_kwargs):
+            return [{"node_id": "MSFT.price"}]
+
+        def graph_provenance(self):
+            return {"graph_version": "CausalNodeV4"}
+
+    monkeypatch.setattr(discover_module, "require_api_key", lambda **_: "test")
+
+    with pytest.raises(GraphReleaseContractError, match="release_id"):
         discover_module.discover_graph_payload(
             "AAPL.price",
             mode="parents",
