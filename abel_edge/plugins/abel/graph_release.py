@@ -195,6 +195,8 @@ def doctor_graph_release(
     *,
     ticker: str = "AAPL.price",
     env_path: str = ".env",
+    probe_start: str | None = None,
+    probe_end: str | None = None,
     client: AbelClient | None = None,
 ) -> dict[str, Any]:
     """Check CAP graph identity, typed routing, and scalar-series usability."""
@@ -202,13 +204,19 @@ def doctor_graph_release(
     release = resolve_graph_release(graph_release)
     api_key = require_api_key(env_path=env_path)
     abel = client or AbelClient(env_path=env_path)
-    from abel_edge.plugins.abel.graph_release_doctor import assess_graph_release
+    from abel_edge.plugins.abel.graph_release_doctor import (
+        PROBE_END,
+        PROBE_START,
+        assess_graph_release,
+    )
 
     return assess_graph_release(
         release=release,
         api_key=api_key,
         client=abel,
         ticker=ticker,
+        probe_start=probe_start or PROBE_START,
+        probe_end=probe_end or PROBE_END,
     )
 
 

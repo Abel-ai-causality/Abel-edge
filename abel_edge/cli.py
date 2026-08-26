@@ -377,9 +377,19 @@ def graph_release_group():
 )
 @click.option("--ticker", default="AAPL.price", show_default=True)
 @click.option("--env-path", default=".env", show_default=True)
+@click.option("--probe-start", default=None, help="Inclusive typed-route probe start date")
+@click.option("--probe-end", default=None, help="Inclusive typed-route probe end date")
 @click.option("--json", "json_output", is_flag=True, help="Emit structured JSON output")
 @click.pass_context
-def graph_release_doctor(ctx, graph_release_path, ticker, env_path, json_output):
+def graph_release_doctor(
+    ctx,
+    graph_release_path,
+    ticker,
+    env_path,
+    probe_start,
+    probe_end,
+    json_output,
+):
     """Fail closed unless CAP proves a graph release is reproducible."""
     try:
         from abel_edge.plugins.abel.graph_release import doctor_graph_release
@@ -388,6 +398,8 @@ def graph_release_doctor(ctx, graph_release_path, ticker, env_path, json_output)
             graph_release_path,
             ticker=ticker,
             env_path=env_path,
+            probe_start=probe_start,
+            probe_end=probe_end,
         )
     except Exception as exc:
         raise click.ClickException(str(exc)) from exc

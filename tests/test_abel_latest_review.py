@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from abel_edge.engine.feed_contract import FeedDateGuardError
 from abel_edge.plugins.abel import discover as discover_module
 from abel_edge.plugins.abel import node_records_client
 from abel_edge.plugins.abel.graph_release import (
@@ -181,6 +182,164 @@ def test_doctor_rejects_market_rows_without_utc_time_in_probe_window(timestamp):
 
     assert result["status"] == "blocked"
     assert result["checks"]["market_symbol_routes"]["status"] == "blocked"
+
+
+def test_doctor_rejects_probe_after_cutoff_before_cap_call(monkeypatch):
+    monkeypatch.setenv("ABEL_EDGE_MAX_DATA_DATE", "2025-06-30")
+    monkeypatch.setenv("ABEL_EDGE_DATE_GUARD_MODE", "fail-closed")
+    calls = []
+
+    class StubClient:
+        def cap_methods(self, **_kwargs):
+            calls.append("cap_methods")
+            return []
+
+        def discover_parents(self, **_kwargs):
+            calls.append("discover_parents")
+            return []
+
+        def markov_blanket(self, **_kwargs):
+            calls.append("markov_blanket")
+            return []
+
+        def graph_provenance(self):
+            return _provenance()
+
+    with pytest.raises(FeedDateGuardError, match="date_guard_violation"):
+        assess_graph_release(
+            release=_v4_release(),
+            api_key="test",
+            client=StubClient(),
+            ticker="AAPL.price",
+        )
+
+    assert calls == []
+
+
+def test_doctor_rejects_market_response_after_cutoff(monkeypatch):
+    monkeypatch.setenv("ABEL_EDGE_MAX_DATA_DATE", "2026-05-28")
+    monkeypatch.setenv("ABEL_EDGE_DATE_GUARD_MODE", "fail-closed")
+
+    class StubClient:
+        def cap_methods(self, **_kwargs):
+            return [{"verb": "traverse.parents"}]
+
+        def discover_parents(self, **_kwargs):
+            return [{"node_id": "MSFT.price"}]
+
+        def markov_blanket(self, **_kwargs):
+            return []
+
+        def graph_provenance(self):
+            return _provenance()
+
+        def fetch_bars(self, **_kwargs):
+            return [
+                {
+                    "timestamp": "2026-05-01T00:00:00Z",
+                    "symbol": "MSFT",
+                    "close": 10.0,
+                },
+                {
+                    "timestamp": "2026-05-29T00:00:00Z",
+                    "symbol": "MSFT",
+                    "close": 11.0,
+                },
+            ]
+
+    result = assess_graph_release(
+        release=_v4_release(),
+        api_key="test",
+        client=StubClient(),
+        ticker="AAPL.price",
+    )
+
+    assert result["status"] == "blocked"
+    assert result["checks"]["market_symbol_routes"]["status"] == "blocked"
+    assert "ABEL_EDGE_MAX_DATA_DATE" in result["checks"]["market_symbol_routes"][
+        "reasons"
+    ][0]
+
+
+def test_doctor_rejects_canonical_availability_after_cutoff(monkeypatch):
+    monkeypatch.setenv("ABEL_EDGE_MAX_DATA_DATE", "2026-05-28")
+    monkeypatch.setenv("ABEL_EDGE_DATE_GUARD_MODE", "fail-closed")
+    node_id = "health.openfda.drug.events:event_count#96bc3e82"
+
+    class StubClient:
+        def cap_methods(self, **_kwargs):
+            return [{"verb": "traverse.parents"}]
+
+        def discover_parents(self, **_kwargs):
+            return [{"node_id": node_id}]
+
+        def markov_blanket(self, **_kwargs):
+            return []
+
+        def graph_provenance(self):
+            return _provenance()
+
+        def fetch_node_series(self, **_kwargs):
+            return [
+                {
+                    "date": "2026-05-28",
+                    "node_id": node_id,
+                    "timestamp": "2026-05-30T00:00:00Z",
+                    "value": 1.0,
+                }
+            ]
+
+    result = assess_graph_release(
+        release=_v4_release(),
+        api_key="test",
+        client=StubClient(),
+        ticker="AAPL.price",
+    )
+
+    assert result["status"] == "blocked"
+    assert result["checks"]["node_id_scalar_series"]["status"] == "blocked"
+    assert "ABEL_EDGE_MAX_DATA_DATE" in result["checks"]["node_id_scalar_series"][
+        "reasons"
+    ][0]
+
+
+def test_doctor_cli_forwards_explicit_probe_window(monkeypatch, tmp_path):
+    from click.testing import CliRunner
+
+    from abel_edge.cli import main
+    from abel_edge.plugins.abel import graph_release as release_module
+    from abel_edge.plugins.abel import graph_release_doctor as doctor_module
+
+    config_path = tmp_path / "graph-release.json"
+    config_path.write_text("{}", encoding="utf-8")
+    observed = {}
+
+    def fake_assess(**kwargs):
+        observed.update(kwargs)
+        return {"status": "ready", "summary": "ready", "blocked_checks": []}
+
+    monkeypatch.setattr(release_module, "resolve_graph_release", lambda _value: object())
+    monkeypatch.setattr(release_module, "require_api_key", lambda **_kwargs: "test")
+    monkeypatch.setattr(release_module, "AbelClient", lambda **_kwargs: object())
+    monkeypatch.setattr(doctor_module, "assess_graph_release", fake_assess)
+    result = CliRunner().invoke(
+        main,
+        [
+            "graph-release",
+            "doctor",
+            "--graph-release",
+            str(config_path),
+            "--probe-start",
+            "2025-06-01",
+            "--probe-end",
+            "2025-06-30",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert observed["probe_start"] == "2025-06-01"
+    assert observed["probe_end"] == "2025-06-30"
 
 
 def test_node_series_rejects_capacity_exhaustion_before_later_year(monkeypatch):

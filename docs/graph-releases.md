@@ -41,6 +41,8 @@ Run the fail-closed gate before consuming a release:
 abel-edge graph-release doctor \
   --graph-release graph-release.json \
   --ticker AAPL.price \
+  --probe-start 2025-06-01 \
+  --probe-end 2025-06-30 \
   --json
 ```
 
@@ -59,6 +61,9 @@ Use a ticker with a non-market parent when testing arbitrary-family V4 support;
 a market-only target proves only the adjusted symbol route.
 Market probes require a finite value on a response row whose normalized symbol
 matches the requested driver; a finite row for another symbol does not pass.
+The probe end must respect `ABEL_EDGE_MAX_DATA_DATE` when the fail-closed date
+guard is active. Edge checks the request before contacting CAP and checks
+market and canonical-node response timestamps again before reporting readiness.
 
 Select the same release during discovery:
 

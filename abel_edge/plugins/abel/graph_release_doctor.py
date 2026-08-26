@@ -6,6 +6,12 @@ import math
 from datetime import datetime, timezone
 from typing import Any
 
+import pandas as pd
+
+from abel_edge.engine.feed_contract import (
+    apply_max_data_date_guard,
+    assert_frame_respects_max_data_date,
+)
 from abel_edge.plugins.abel.client import split_public_node_id
 from abel_edge.plugins.abel.graph_driver import classify_v4_driver
 from abel_edge.plugins.abel.graph_provenance import graph_provenance_reasons
@@ -16,7 +22,16 @@ PROBE_END = "2026-05-28"
 PROBE_LIMIT = 100
 
 
-def assess_graph_release(*, release, api_key: str, client, ticker: str) -> dict[str, Any]:
+def assess_graph_release(
+    *,
+    release,
+    api_key: str,
+    client,
+    ticker: str,
+    probe_start: str = PROBE_START,
+    probe_end: str = PROBE_END,
+) -> dict[str, Any]:
+    probe_end = apply_max_data_date_guard(probe_end, source="Abel graph-release doctor")
     methods = client.cap_methods(api_key=api_key)
     parents = client.discover_parents(
         node_id=ticker,
@@ -58,11 +73,19 @@ def assess_graph_release(*, release, api_key: str, client, ticker: str) -> dict[
         blanket_reasons.append(
             f"{unrouted_blanket_count} Markov-blanket item(s) lacked a routable node identity"
         )
-    market_reasons = _probe_market_routes(routed, client=client, api_key=api_key)
+    market_reasons = _probe_market_routes(
+        routed,
+        client=client,
+        api_key=api_key,
+        probe_start=probe_start,
+        probe_end=probe_end,
+    )
     node_reasons, node_details = _probe_node_routes(
         routed,
         client=client,
         api_key=api_key,
+        probe_start=probe_start,
+        probe_end=probe_end,
     )
     checks = {
         "config": {"status": "pass"},
@@ -113,7 +136,7 @@ def assess_graph_release(*, release, api_key: str, client, ticker: str) -> dict[
         "graph_release": release.payload,
         "graph_release_sha256": release.sha256,
         "ticker": ticker,
-        "probe_window": {"start": PROBE_START, "end": PROBE_END},
+        "probe_window": {"start": probe_start, "end": probe_end},
         "checks": checks,
         "blocked_checks": blocked,
     }
@@ -174,7 +197,14 @@ def _unique_routes(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return unique
 
 
-def _probe_market_routes(routed, *, client, api_key: str) -> list[str]:
+def _probe_market_routes(
+    routed,
+    *,
+    client,
+    api_key: str,
+    probe_start: str = PROBE_START,
+    probe_end: str = PROBE_END,
+) -> list[str]:
     reasons = []
     seen = set()
     for item in routed:
@@ -188,17 +218,27 @@ def _probe_market_routes(routed, *, client, api_key: str) -> list[str]:
         try:
             rows = client.fetch_bars(
                 symbols=[ref["symbol"]],
-                start=PROBE_START,
-                end=PROBE_END,
+                start=probe_start,
+                end=probe_end,
                 timeframe="1d",
                 limit=PROBE_LIMIT,
                 fields=[ref["field"]],
                 api_key=api_key,
             )
+            _assert_response_respects_cutoff(
+                rows,
+                source=f"Abel graph-release doctor symbol route {ref['symbol']}",
+            )
         except Exception as exc:
             reasons.append(f"{item['node_id']}: symbol route failed: {exc}")
             continue
-        if not _has_finite_market_row(rows, ref["field"], ref["symbol"]):
+        if not _has_finite_market_row(
+            rows,
+            ref["field"],
+            ref["symbol"],
+            probe_start=probe_start,
+            probe_end=probe_end,
+        ):
             reasons.append(
                 f"{item['node_id']}: symbol route returned no finite "
                 f"{ref['field']} values for {ref['symbol']}"
@@ -206,7 +246,14 @@ def _probe_market_routes(routed, *, client, api_key: str) -> list[str]:
     return reasons
 
 
-def _probe_node_routes(routed, *, client, api_key: str) -> tuple[list[str], list[dict[str, Any]]]:
+def _probe_node_routes(
+    routed,
+    *,
+    client,
+    api_key: str,
+    probe_start: str = PROBE_START,
+    probe_end: str = PROBE_END,
+) -> tuple[list[str], list[dict[str, Any]]]:
     reasons = []
     details = []
     for item in routed:
@@ -217,10 +264,14 @@ def _probe_node_routes(routed, *, client, api_key: str) -> tuple[list[str], list
         try:
             rows = client.fetch_node_series(
                 node_id=node_id,
-                start=PROBE_START,
-                end=PROBE_END,
+                start=probe_start,
+                end=probe_end,
                 limit=None,
                 api_key=api_key,
+            )
+            _assert_response_respects_cutoff(
+                rows,
+                source=f"Abel graph-release doctor node route {node_id}",
             )
         except Exception as exc:
             reasons.append(f"{node_id}: node_id route failed: {exc}")
@@ -270,16 +321,28 @@ def _node_id(item: dict[str, Any]) -> str:
     return ""
 
 
-def _has_finite_market_row(rows: Any, field: str, symbol: str) -> bool:
+def _has_finite_market_row(
+    rows: Any,
+    field: str,
+    symbol: str,
+    *,
+    probe_start: str = PROBE_START,
+    probe_end: str = PROBE_END,
+) -> bool:
     expected_symbol = str(symbol or "").strip().upper()
     return isinstance(rows, list) and any(
         isinstance(row, dict)
         and str(row.get("symbol") or "").strip().upper() == expected_symbol
         and (event_time := _event_time(row))
-        and PROBE_START <= event_time[:10] <= PROBE_END
+        and probe_start <= event_time[:10] <= probe_end
         and _finite(row.get(field))
         for row in rows
     )
+
+
+def _assert_response_respects_cutoff(rows: Any, *, source: str) -> None:
+    if isinstance(rows, list):
+        assert_frame_respects_max_data_date(pd.DataFrame(rows), source=source)
 
 
 def _event_time(row: Any) -> str:

@@ -12,6 +12,11 @@
   non-market parents use exact `node_id` scalar-series mode and never fall
   back to a guessed symbol.
 
+### Fixed
+
+- Graph-release doctor probes now accept explicit date windows and enforce the
+  configured maximum data date before requests and after typed-route responses.
+
 ## [0.8.10] - 2026-06-29
 
 ### Changed
