@@ -79,6 +79,12 @@ def load_feed_frame(
     if end is not None:
         apply_max_data_date_guard(end, source=f"feed '{feed_name}' visible window")
     requested_end = end if request_end is None else request_end
+    if (
+        kind == "point_in_time_series"
+        and requested_end is None
+        and feed_cfg.get("source_end") is not None
+    ):
+        requested_end = feed_cfg["source_end"]
     guarded_request_end = apply_max_data_date_guard(
         requested_end,
         source=f"feed '{feed_name}' adapter request",

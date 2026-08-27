@@ -193,6 +193,49 @@ def test_date_guard_uses_available_at_instead_of_event_time(tmp_path, monkeypatc
         )
 
 
+def test_point_in_time_feed_uses_frozen_source_end_before_global_cutoff(monkeypatch):
+    calls = []
+
+    class RecordingPointInTimeAdapter:
+        assume_utc_for_naive = False
+
+        def load(self, request):
+            calls.append(request)
+            frame = pd.DataFrame(
+                {
+                    "observed_at": ["2025-06-28T00:00:00Z"],
+                    "released_at": ["2025-06-29T00:00:00Z"],
+                    "reading": [1.0],
+                }
+            )
+            frame.attrs["source_receipt_sha256"] = request.series_spec.payload[
+                "provenance"
+            ]["source_receipt_sha256"]
+            frame.attrs["series_spec_sha256"] = request.series_spec.sha256
+            return frame
+
+    register_adapter("recording_point_in_time", RecordingPointInTimeAdapter())
+    spec = _series_spec()
+    spec["source"]["adapter"] = "recording_point_in_time"
+    monkeypatch.setenv("ABEL_EDGE_MAX_DATA_DATE", "2025-06-30")
+    monkeypatch.setenv("ABEL_EDGE_DATE_GUARD_MODE", "fail-closed")
+
+    load_feed_frame(
+        {
+            "name": "canonical",
+            "kind": "point_in_time_series",
+            "adapter": "recording_point_in_time",
+            "profile": "daily",
+            "series_spec": spec,
+            "source_start": "2020-01-01",
+            "source_end": "2025-06-29",
+        }
+    )
+
+    assert calls[0].end == "2025-06-29"
+    assert calls[0].options["source_end"] == "2025-06-29"
+
+
 def test_loader_rejects_adapter_source_receipt_drift():
     class StaleReceiptAdapter:
         assume_utc_for_naive = False
