@@ -16,6 +16,9 @@
 
 - Graph-release doctor probes now accept explicit date windows and enforce the
   configured maximum data date before requests and after typed-route responses.
+- V4 discovery now resolves the target once so the CAP query, typed
+  `target_ref`, and flat target projections agree for dotted symbols such as
+  `BRK.B` and `000858.SZ`; V3 discovery behavior remains unchanged.
 
 ## [0.8.10] - 2026-06-29
 
