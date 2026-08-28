@@ -86,6 +86,19 @@ references. V4 preserves the original graph node ID and dispatches it as:
 Each typed reference has a canonical `driver_ref_sha256`. It is a routing
 identity, not a transform or source-data receipt.
 
+For V4, Edge resolves the requested target once before calling CAP. The
+payload's `target_ref.node_id` is therefore the exact node ID sent in
+`params.node_id`; its nested `driver_ref` uses the same routing contract as a
+discovered driver. The flat `ticker`, `target_asset`, and `target_node` fields
+are compatibility projections of `target_ref`, not a second identity source.
+For example, a `BRK.B` request is queried and returned as `BRK.B.price`, with
+`target_asset` set to `BRK.B`. Canonical target IDs are preserved exactly and
+have an empty flat asset projection.
+
+V3 deliberately does not emit `target_ref`. Omitting a release or selecting a
+validated V3 release keeps the existing legacy query normalization and payload
+shape while retaining release provenance.
+
 ## Failure Boundary
 
 Edge does not load an old S3 graph package, route price/volume graph nodes via

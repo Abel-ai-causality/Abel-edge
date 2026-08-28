@@ -14,8 +14,12 @@ from abel_edge.plugins.abel.graph_release import (
     GraphReleaseConfig,
     resolve_graph_release,
 )
-from abel_edge.plugins.abel.graph_driver import classify_v4_driver
+from abel_edge.plugins.abel.graph_driver import (
+    classify_v4_driver,
+    resolve_graph_target,
+)
 from abel_edge.plugins.abel.graph_provenance import require_graph_provenance
+from abel_edge.plugins.abel.market_contract import normalize_public_node_id
 
 
 def discover_graph_nodes(
@@ -56,10 +60,16 @@ def discover_graph_payload(
     abel = client or AbelClient(env_path=env_path)
     release = resolve_graph_release(graph_release)
     limit = min(max(limit, 1), 20)
+    query_node_id, target = resolve_graph_target(
+        node_id,
+        graph_version=release.graph_version,
+        legacy_normalizer=normalize_public_node_id,
+        legacy_splitter=split_public_node_id,
+    )
 
     if mode == "all":
         parents = _discover_mode_items(
-            node_id=node_id,
+            node_id=query_node_id,
             mode="parents",
             limit=limit,
             api_key=api_key,
@@ -67,7 +77,7 @@ def discover_graph_payload(
             release=release,
         )
         blanket_items = _discover_mode_items(
-            node_id=node_id,
+            node_id=query_node_id,
             mode="mb",
             limit=limit,
             api_key=api_key,
@@ -75,26 +85,23 @@ def discover_graph_payload(
             release=release,
         )
         return _build_discovery_payload(
-            node_id,
+            target,
             parents=parents,
             blanket_items=blanket_items,
             release=release,
         )
 
     items = _discover_mode_items(
-        node_id=node_id,
+        node_id=query_node_id,
         mode=mode,
         limit=limit,
         api_key=api_key,
         client=abel,
         release=release,
     )
-    target_asset, target_node = _target_identity(node_id, release=release)
     if mode == "parents":
         return {
-            "ticker": target_asset,
-            "target_asset": target_asset,
-            "target_node": target_node,
+            **target,
             "source": "abel_live",
             "mode": mode,
             "parents": items,
@@ -108,7 +115,7 @@ def discover_graph_payload(
         }
     if mode == "mb":
         payload = _build_discovery_payload(
-            node_id,
+            target,
             parents=[],
             blanket_items=items,
             release=release,
@@ -236,13 +243,12 @@ def _discover_mode_items(
 
 
 def _build_discovery_payload(
-    node_id: str,
+    target: Mapping[str, Any],
     *,
     parents: list[dict[str, Any]],
     blanket_items: list[dict[str, Any]],
     release: GraphReleaseConfig,
 ) -> dict[str, Any]:
-    target_asset, target_node = _target_identity(node_id, release=release)
     parent_keys = {item["node_id"] for item in parents}
     children: list[dict[str, Any]] = []
     blanket_new: list[dict[str, Any]] = []
@@ -266,9 +272,7 @@ def _build_discovery_payload(
         seen_blanket.add(key)
 
     return {
-        "ticker": target_asset,
-        "target_asset": target_asset,
-        "target_node": target_node,
+        **target,
         "source": "abel_live",
         "parents": parents,
         "blanket_new": blanket_new,
@@ -366,22 +370,6 @@ def _pick_roles(item: dict[str, Any]) -> list[str]:
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
-
-
-def _target_identity(
-    node_id: str,
-    *,
-    release: GraphReleaseConfig,
-) -> tuple[str, str]:
-    if release.is_canonical:
-        raw = str(node_id).strip()
-        try:
-            ticker, field = split_public_node_id(raw)
-        except ValueError:
-            return "", raw
-        return ticker, f"{ticker}.{field}"
-    ticker, field = split_public_node_id(node_id)
-    return ticker, f"{ticker}.{field}"
 
 
 def _call_client_discovery(

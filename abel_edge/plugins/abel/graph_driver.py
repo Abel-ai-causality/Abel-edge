@@ -33,6 +33,37 @@ def normalize_graph_query_node_id(
     return f"{raw.upper()}.price"
 
 
+def resolve_graph_target(
+    value: str,
+    *,
+    graph_version: str,
+    legacy_normalizer: Callable[[str], str],
+    legacy_splitter: Callable[[str], tuple[str, str]],
+) -> tuple[str, dict[str, Any]]:
+    """Resolve the query and payload identity from one graph-version rule."""
+
+    if graph_version == "CausalNodeV4":
+        query_node_id = normalize_graph_query_node_id(
+            value,
+            graph_version=graph_version,
+            legacy_normalizer=legacy_normalizer,
+        )
+        target_ref = describe_v4_node(query_node_id)
+        target_asset = str(target_ref.get("ticker") or "")
+        return query_node_id, {
+            "ticker": target_asset,
+            "target_asset": target_asset,
+            "target_node": target_ref["node_id"],
+            "target_ref": target_ref,
+        }
+    ticker, field = legacy_splitter(value)
+    return value, {
+        "ticker": ticker,
+        "target_asset": ticker,
+        "target_node": f"{ticker}.{field}",
+    }
+
+
 def classify_v4_driver(
     item: Mapping[str, Any],
     *,
@@ -40,6 +71,18 @@ def classify_v4_driver(
     source_rank: int,
 ) -> dict[str, Any]:
     """Preserve graph identity while choosing the safe CAP data route."""
+
+    routed = describe_v4_node(node_id)
+    routed["source_rank"] = source_rank
+    return routed
+
+
+def describe_v4_node(node_id: str) -> dict[str, Any]:
+    """Describe one exact V4 graph node and its safe data route."""
+
+    node_id = str(node_id or "").strip()
+    if not node_id:
+        raise ValueError("V4 graph node id cannot be empty.")
 
     market = parse_market_node_id(node_id)
     if market is not None:
@@ -57,7 +100,6 @@ def classify_v4_driver(
             "ticker": symbol,
             "field": field,
             "family": MARKET_PRICE_FAMILY if field == "close" else MARKET_VOLUME_FAMILY,
-            "source_rank": source_rank,
             "driver_ref": driver_ref,
             "driver_ref_sha256": _digest(driver_ref),
         }
@@ -73,7 +115,6 @@ def classify_v4_driver(
     return {
         "node_id": node_id,
         "family": infer_raw_node_family(node_id),
-        "source_rank": source_rank,
         "driver_ref": driver_ref,
         "driver_ref_sha256": _digest(driver_ref),
     }
