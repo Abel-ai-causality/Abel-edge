@@ -50,6 +50,40 @@ def fetch_bars(
     return frame
 
 
+def fetch_node_series(
+    *,
+    node_id: str,
+    start=None,
+    end=None,
+    limit: int | None = None,
+    config: dict | None = None,
+    client: AbelClient | None = None,
+) -> pd.DataFrame:
+    """Fetch one CAP scalar graph-node series without price adjustment."""
+
+    env_path = (config or {}).get("env_path", ".env")
+    try:
+        api_key = require_api_key(env_path=env_path)
+    except MissingAbelApiKeyError as e:
+        raise MissingAbelApiKeyError(
+            f"{e} Canonical Abel nodes require live node_id data access."
+        ) from e
+    guarded_end = apply_max_data_date_guard(end, source="Abel node-series fetch")
+    abel = client or AbelClient(env_path=env_path)
+    payload = abel.fetch_node_series(
+        node_id=node_id,
+        start=start,
+        end=guarded_end,
+        limit=limit,
+        api_key=api_key,
+    )
+    frame = pd.DataFrame(payload)
+    if frame.empty and "timestamp" not in frame.columns:
+        frame = pd.DataFrame(columns=["timestamp", "node_id", "value"])
+    assert_frame_respects_max_data_date(frame, source="Abel node-series fetch")
+    return frame
+
+
 def empty_bar_frame(*, fields: list[str] | None = None) -> pd.DataFrame:
     columns = ["timestamp", "symbol"]
     for field in fields or list(DEFAULT_BAR_FIELDS):

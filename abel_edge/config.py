@@ -14,6 +14,10 @@ from abel_edge.engine.adapter_registry import (
     ensure_adapter_registered,
     load_adapter_imports,
 )
+from abel_edge.engine.point_in_time_series import (
+    PointInTimeSeriesContractError,
+    PointInTimeSeriesSpec,
+)
 
 DEFAULTS: dict[str, Any] = {
     "capital": 100000,
@@ -140,12 +144,33 @@ def _validate_feeds(feeds: Any, *, scope: str) -> None:
         if not isinstance(feed, dict):
             raise ValueError(f"{scope} feed '{name}' must be a mapping.")
         kind = str(feed.get("kind", "")).strip().lower()
-        if kind not in {"bars", "series"}:
-            raise ValueError(f"{scope} feed '{name}' kind must be 'bars' or 'series'.")
+        if kind not in {"bars", "series", "point_in_time_series"}:
+            raise ValueError(
+                f"{scope} feed '{name}' kind must be 'bars', 'series', "
+                "or 'point_in_time_series'."
+            )
+        point_in_time_spec = None
+        if kind == "point_in_time_series":
+            try:
+                point_in_time_spec = PointInTimeSeriesSpec.from_mapping(
+                    feed.get("series_spec")
+                )
+            except PointInTimeSeriesContractError as exc:
+                raise ValueError(f"{scope} feed '{name}': {exc}") from exc
         adapter = feed.get("adapter") or feed.get("source")
+        if point_in_time_spec is not None:
+            if adapter and str(adapter).strip().lower() != point_in_time_spec.source_adapter:
+                raise ValueError(
+                    f"{scope} feed '{name}' adapter does not match "
+                    "series_spec.source.adapter."
+                )
+            adapter = point_in_time_spec.source_adapter
         if adapter is not None and (not isinstance(adapter, str) or not adapter.strip()):
             raise ValueError(f"{scope} feed '{name}' adapter must be a non-empty string.")
-        if str(adapter or "").strip().lower() == "csv" and not feed.get("path"):
+        csv_path = feed.get("path")
+        if point_in_time_spec is not None:
+            csv_path = point_in_time_spec.source_request.get("path")
+        if str(adapter or "").strip().lower() == "csv" and not csv_path:
             raise ValueError(f"{scope} feed '{name}' path is required when adapter='csv'.")
         if kind == "series" and not feed.get("field"):
             raise ValueError(f"{scope} feed '{name}' field is required when kind='series'.")
@@ -184,9 +209,19 @@ def _normalize_feed(
     normalized = dict(feed)
     normalized["name"] = name
     normalized["kind"] = str(feed.get("kind", "")).strip().lower()
-    normalized["adapter"] = feed.get("adapter") or feed.get("source") or price_settings.get(
-        "default_adapter",
-        price_settings.get("default_source", "abel"),
+    point_in_time_spec = None
+    if normalized["kind"] == "point_in_time_series":
+        point_in_time_spec = PointInTimeSeriesSpec.from_mapping(feed["series_spec"])
+        normalized["series_spec"] = point_in_time_spec.to_mapping()
+    normalized["adapter"] = (
+        point_in_time_spec.source_adapter
+        if point_in_time_spec is not None
+        else feed.get("adapter")
+        or feed.get("source")
+        or price_settings.get(
+            "default_adapter",
+            price_settings.get("default_source", "abel"),
+        )
     )
     normalized["timeframe"] = (
         feed.get("timeframe") or price_settings.get("default_timeframe", "1d")

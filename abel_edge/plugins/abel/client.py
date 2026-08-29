@@ -8,12 +8,21 @@ import shutil
 import subprocess
 import sys
 import time
+from copy import deepcopy
 from typing import Any
 import uuid
 
 import requests
 
 from abel_edge.plugins.abel.credentials import resolve_cap_base_url
+from abel_edge.plugins.abel.graph_driver import normalize_graph_query_node_id
+from abel_edge.plugins.abel import node_records_client
+from abel_edge.plugins.abel.market_contract import (
+    normalize_market_fields as _normalize_market_fields,
+    normalize_market_symbol as _normalize_market_symbol,
+    normalize_public_node_id,
+    split_public_node_id as split_public_node_id,
+)
 
 CAP_VERSION = "0.2.2"
 DEFAULT_GRAPH_ID = "abel-main"
@@ -21,69 +30,10 @@ DEFAULT_GRAPH_VERSION = "CausalNodeV3"
 DEFAULT_TIMEOUT_SECONDS = 60
 DEFAULT_RETRY_ATTEMPTS = 4
 
-CRYPTO_ALIASES = {"BTC", "ETH", "SOL", "XRP", "DOGE", "ADA", "AVAX"}
-SUPPORTED_FIELDS = {"price", "volume"}
-SUPPORTED_MARKET_FIELDS = {"open", "high", "low", "close", "volume"}
-
-
-def normalize_public_node_id(value: str, *, default_field: str = "price") -> str:
-    raw = value.strip()
-    if not raw:
-        raise ValueError("Ticker or node id cannot be empty.")
-    if default_field not in SUPPORTED_FIELDS:
-        raise ValueError(f"Unsupported field '{default_field}'.")
-
-    normalized = raw.upper()
-    ticker, dot, suffix = normalized.rpartition(".")
-    if dot:
-        field = suffix.lower()
-        if field not in SUPPORTED_FIELDS:
-            raise ValueError("Abel node ids must end with .price or .volume.")
-        return f"{ticker}.{field}"
-
-    ticker, underscore, suffix = normalized.rpartition("_")
-    if underscore:
-        field = suffix.lower()
-        if field == "close":
-            return f"{ticker}.price"
-        if field == "volume":
-            return f"{ticker}.volume"
-        raise ValueError("Abel node ids must use .price or .volume.")
-
-    if normalized in CRYPTO_ALIASES:
-        normalized = f"{normalized}USD"
-    return f"{normalized}.{default_field}"
-
-
-def split_public_node_id(node_id: str) -> tuple[str, str]:
-    ticker, _, field = normalize_public_node_id(node_id).rpartition(".")
-    return ticker, field
-
-
 def _serialize_timestamp(value):
     if value is None:
         return None
-    if hasattr(value, "isoformat"):
-        return value.isoformat()
-    return str(value)
-
-
-def _normalize_market_fields(fields: list[str] | None) -> list[str]:
-    requested = fields or ["open", "high", "low", "close", "volume"]
-    normalized = []
-    seen = set()
-    for field in requested:
-        name = str(field).strip().lower()
-        if name in {"timestamp", "symbol", "date"}:
-            continue
-        if name not in SUPPORTED_MARKET_FIELDS:
-            continue
-        if name not in seen:
-            seen.add(name)
-            normalized.append(name)
-    if not normalized:
-        return ["open", "high", "low", "close", "volume"]
-    return normalized
+    return value.isoformat() if hasattr(value, "isoformat") else str(value)
 
 
 class AbelClient:
@@ -96,6 +46,7 @@ class AbelClient:
     ) -> None:
         self.cap_base_url = (cap_base_url or resolve_cap_base_url(env_path=env_path)).rstrip("/")
         self.session = session or requests.Session()
+        self._last_cap_provenance: dict[str, Any] = {}
 
     def _post_json(self, *, url: str, payload: dict[str, Any], headers: dict[str, str]) -> dict[str, Any]:
         last_exc = None
@@ -122,21 +73,57 @@ class AbelClient:
             raise last_exc
         raise RuntimeError("Abel CAP request exhausted retries without a response.")
 
-    def discover_parents(self, *, node_id: str, limit: int, api_key: str) -> list[dict[str, Any]]:
+    def discover_parents(
+        self,
+        *,
+        node_id: str,
+        limit: int,
+        api_key: str,
+        graph_ref: dict[str, str] | None = None,
+    ) -> list[dict[str, Any]]:
         payload = self._post_cap(
             verb="traverse.parents",
-            params={"node_id": normalize_public_node_id(node_id), "top_k": min(limit, 20)},
+            params={
+                "node_id": _normalize_graph_node_id(node_id, graph_ref=graph_ref),
+                "top_k": min(limit, 20),
+            },
             api_key=api_key,
+            graph_ref=graph_ref,
         )
         return _extract_items(payload)
 
-    def markov_blanket(self, *, node_id: str, limit: int, api_key: str) -> list[dict[str, Any]]:
+    def markov_blanket(
+        self,
+        *,
+        node_id: str,
+        limit: int,
+        api_key: str,
+        graph_ref: dict[str, str] | None = None,
+    ) -> list[dict[str, Any]]:
         payload = self._post_cap(
             verb="graph.markov_blanket",
-            params={"node_id": normalize_public_node_id(node_id), "max_neighbors": min(limit, 20)},
+            params={
+                "node_id": _normalize_graph_node_id(node_id, graph_ref=graph_ref),
+                "max_neighbors": min(limit, 20),
+            },
             api_key=api_key,
+            graph_ref=graph_ref,
         )
         return _extract_items(payload)
+
+    def cap_methods(self, *, api_key: str) -> list[dict[str, Any]]:
+        payload = self._post_cap(
+            verb="meta.methods",
+            params={"detail": "full", "include_examples": False},
+            api_key=api_key,
+            graph_ref=None,
+        )
+        result = payload.get("result") or {}
+        methods = result.get("methods") if isinstance(result, dict) else []
+        return [item for item in (methods or []) if isinstance(item, dict)]
+
+    def graph_provenance(self) -> dict[str, Any]:
+        return deepcopy(self._last_cap_provenance)
 
     def fetch_bars(
         self,
@@ -153,7 +140,7 @@ class AbelClient:
             endpoint="day_bar",
             body={
                 "symbols": [
-                    normalize_public_node_id(symbol, default_field="price").split(".")[0]
+                    _normalize_market_symbol(symbol)
                     for symbol in symbols
                 ],
                 "start": _serialize_timestamp(start),
@@ -169,7 +156,56 @@ class AbelClient:
             items = items.get("items") or items.get("bars") or []
         return items
 
-    def _post_cap(self, *, verb: str, params: dict[str, Any], api_key: str) -> dict[str, Any]:
+    def fetch_node_series(
+        self,
+        *,
+        node_id: str,
+        start: str | None,
+        end: str | None,
+        limit: int | None,
+        api_key: str,
+    ) -> Any:
+        """Fetch one unadjusted scalar series by its exact V4 node id."""
+
+        return node_records_client.fetch_all_node_series(
+            fetch_page=self.fetch_node_series_page,
+            node_id=node_id,
+            start=start,
+            end=end,
+            limit=limit,
+            api_key=api_key,
+        )
+
+    def fetch_node_series_page(
+        self,
+        *,
+        node_id: str,
+        start: str | None,
+        end: str | None,
+        limit: int | None,
+        cursor_date: str | None,
+        api_key: str,
+    ) -> dict[str, Any]:
+        """Fetch one exact CAP scalar-series page for a V4 node."""
+
+        return node_records_client.fetch_node_series_page(
+            post_market=self._post_market,
+            node_id=node_id,
+            start=start,
+            end=end,
+            limit=limit,
+            cursor_date=cursor_date,
+            api_key=api_key,
+        )
+
+    def _post_cap(
+        self,
+        *,
+        verb: str,
+        params: dict[str, Any],
+        api_key: str,
+        graph_ref: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
         headers = {
             "Accept": "application/json",
             "Content-Type": "application/json",
@@ -177,7 +213,7 @@ class AbelClient:
             if api_key.lower().startswith("bearer ")
             else f"Bearer {api_key}",
         }
-        return self._post_json(
+        payload = self._post_json(
             url=f"{self.cap_base_url}/cap",
             payload={
                 "cap_version": CAP_VERSION,
@@ -189,10 +225,17 @@ class AbelClient:
                         "graph_id": DEFAULT_GRAPH_ID,
                         "graph_version": DEFAULT_GRAPH_VERSION,
                     }
+                    if graph_ref is None
+                    else deepcopy(graph_ref)
                 },
             },
             headers=headers,
         )
+        provenance = payload.get("provenance")
+        self._last_cap_provenance = (
+            deepcopy(provenance) if isinstance(provenance, dict) else {}
+        )
+        return payload
 
     def _post_market(self, *, endpoint: str, body: dict[str, Any], api_key: str) -> dict[str, Any]:
         headers = {
@@ -273,3 +316,17 @@ def _extract_items(payload: dict[str, Any]) -> list[dict[str, Any]]:
     if isinstance(result, list):
         return [item for item in result if isinstance(item, dict)]
     return []
+
+
+def _normalize_graph_node_id(
+    value: str,
+    *,
+    graph_ref: dict[str, str] | None,
+) -> str:
+    return normalize_graph_query_node_id(
+        value,
+        graph_version=str(
+            (graph_ref or {}).get("graph_version") or DEFAULT_GRAPH_VERSION
+        ),
+        legacy_normalizer=normalize_public_node_id,
+    )

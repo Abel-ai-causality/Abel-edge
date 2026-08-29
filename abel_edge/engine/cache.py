@@ -12,6 +12,8 @@ from typing import Any, Iterable
 
 import pandas as pd
 
+from abel_edge.engine.cache_lock import exclusive_cache_lock
+
 CACHE_ROOT_ENV = "ABEL_EDGE_CACHE_ROOT"
 DEFAULT_CACHE_ROOT = Path(".cache/market_data")
 _OPTION_EXCLUDE = {
@@ -77,6 +79,33 @@ def cache_entry_for_request(
     )
 
 
+def point_in_time_cache_entry(
+    *,
+    adapter: str,
+    series_spec_sha256: str,
+    cache_root: str | Path | None = None,
+) -> CacheEntry:
+    """Resolve a path-safe cache entry keyed by the complete frozen series spec."""
+
+    spec_hash = str(series_spec_sha256 or "").strip().lower()
+    if len(spec_hash) != 64 or any(char not in "0123456789abcdef" for char in spec_hash):
+        raise ValueError("point-in-time cache requires a lowercase series spec SHA-256")
+    normalized_adapter = str(adapter or "").strip().lower()
+    root = resolve_cache_root(cache_root)
+    entry_root = root / normalized_adapter / "point_in_time_series"
+    entry_root.mkdir(parents=True, exist_ok=True)
+    disk_key = spec_hash[:40]
+    return CacheEntry(
+        root=root,
+        key=spec_hash,
+        adapter=normalized_adapter,
+        symbol=spec_hash,
+        timeframe="point_in_time_series",
+        data_path=entry_root / f"{disk_key}.csv",
+        meta_path=entry_root / f"{disk_key}.json",
+    )
+
+
 def load_cached_bars(entry: CacheEntry) -> pd.DataFrame | None:
     if not entry.data_path.exists():
         return None
@@ -94,6 +123,67 @@ def load_cached_metadata(entry: CacheEntry) -> dict[str, Any]:
     except json.JSONDecodeError:
         return {}
     return payload if isinstance(payload, dict) else {}
+
+
+def point_in_time_cache_covers_request(
+    metadata: dict[str, Any],
+    *,
+    series_spec_sha256: str,
+    source_receipt_sha256: str,
+    start: object | None,
+    end: object | None,
+    limit: int | None,
+) -> bool:
+    if metadata.get("contract") != "abel-edge.point-in-time-cache/v2":
+        return False
+    if metadata.get("series_spec_sha256") != series_spec_sha256:
+        return False
+    if metadata.get("source_receipt_sha256") != source_receipt_sha256:
+        return False
+    requested = metadata.get("requested_range") or {}
+    cached_start = _as_timestamp(requested.get("start"))
+    cached_end = _as_timestamp(requested.get("end"))
+    requested_start = _as_timestamp(start)
+    requested_end = _as_timestamp(end)
+    if requested_start is not None and (
+        cached_start is None or cached_start > requested_start
+    ):
+        return False
+    if requested_end is not None and (cached_end is None or cached_end < requested_end):
+        return False
+    cached_limit = requested.get("limit")
+    if cached_limit is not None and (
+        cached_start != requested_start or cached_end != requested_end
+    ):
+        return False
+    if limit is None:
+        if cached_limit is not None:
+            return False
+    else:
+        try:
+            if cached_limit is not None and int(cached_limit) < int(limit):
+                return False
+        except (TypeError, ValueError):
+            return False
+    return bool(metadata.get("data_sha256"))
+
+
+def load_cached_point_in_time_series(
+    entry: CacheEntry,
+    *,
+    metadata: dict[str, Any],
+) -> pd.DataFrame | None:
+    if not entry.data_path.is_file():
+        return None
+    expected_data_hash = str(metadata.get("data_sha256") or "")
+    if not expected_data_hash or _file_sha256(entry.data_path) != expected_data_hash:
+        return None
+    frame = pd.read_csv(entry.data_path)
+    frame.attrs["source_receipt_sha256"] = str(
+        metadata.get("source_receipt_sha256") or ""
+    )
+    frame.attrs["series_spec_sha256"] = str(metadata.get("series_spec_sha256") or "")
+    return frame
 
 
 def cache_covers_request(
@@ -121,18 +211,20 @@ def cache_covers_request(
             return False
     available_start = _as_timestamp((metadata.get("available_range") or {}).get("start"))
     available_end = _as_timestamp((metadata.get("available_range") or {}).get("end"))
-    requested_start = _as_timestamp(start)
-    requested_end = _as_timestamp(end)
+    requested_start, requested_end = _as_timestamp(start), _as_timestamp(end)
     cached_request = metadata.get("requested_range") or {}
     cached_requested_start = _as_timestamp(cached_request.get("start"))
+    cached_requested_end = _as_timestamp(cached_request.get("end"))
     if requested_start is not None:
         if available_start is None:
             return False
         if available_start > requested_start:
             if cached_requested_start is None or cached_requested_start > requested_start:
                 return False
-    if requested_end is not None and (available_end is None or available_end < requested_end):
-        return False
+    if requested_end is not None:
+        end_was_probed = cached_requested_end is not None and cached_requested_end >= requested_end
+        if available_end is None or (available_end < requested_end and not end_was_probed):
+            return False
     if limit is not None:
         try:
             requested_limit = int(limit)
@@ -171,6 +263,57 @@ def write_cached_bars(
         json.dumps(metadata, indent=2, sort_keys=True),
         encoding="utf-8",
     )
+    return metadata
+
+
+def write_cached_point_in_time_series(
+    entry: CacheEntry,
+    frame: pd.DataFrame,
+    *,
+    series_spec_sha256: str,
+    source_receipt_sha256: str,
+    requested_start: object | None,
+    requested_end: object | None,
+    requested_limit: int | None,
+) -> dict[str, Any]:
+    """Persist an exact receipt-checked point-in-time response."""
+
+    if "value" not in frame.columns or not {
+        "event_time",
+        "timestamp",
+    }.intersection(frame.columns):
+        raise ValueError(
+            "Cached point-in-time series requires value and event_time or timestamp."
+        )
+    entry.data_path.parent.mkdir(parents=True, exist_ok=True)
+    with exclusive_cache_lock(entry.data_path):
+        temporary = entry.data_path.parent / f".data-{os.urandom(8).hex()}.partial"
+        frame.to_csv(temporary, index=False, lineterminator="\n")
+        temporary.replace(entry.data_path)
+        metadata = {
+            "contract": "abel-edge.point-in-time-cache/v2",
+            "adapter": entry.adapter,
+            "cache_key": entry.key,
+            "data_path": str(entry.data_path),
+            "metadata_path": str(entry.meta_path),
+            "data_sha256": _file_sha256(entry.data_path),
+            "series_spec_sha256": series_spec_sha256,
+            "source_receipt_sha256": source_receipt_sha256,
+            "requested_range": {
+                "start": _format_request_bound(requested_start, exact=True),
+                "end": _format_request_bound(requested_end, exact=True),
+                "limit": int(requested_limit) if requested_limit is not None else None,
+            },
+            "row_count": int(len(frame)),
+            "columns": list(frame.columns),
+            "updated_at": datetime.now(tz=UTC).isoformat(),
+        }
+        metadata_temporary = entry.meta_path.parent / f".meta-{os.urandom(8).hex()}.partial"
+        metadata_temporary.write_text(
+            json.dumps(metadata, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+        metadata_temporary.replace(entry.meta_path)
     return metadata
 
 
@@ -233,11 +376,19 @@ def _sanitize_options(options: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
-def _format_request_bound(value: object | None) -> str | None:
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _format_request_bound(value: object | None, *, exact: bool = False) -> str | None:
     timestamp = _as_timestamp(value)
     if timestamp is None:
         return None
-    return timestamp.date().isoformat()
+    return timestamp.isoformat() if exact else timestamp.date().isoformat()
 
 
 def _as_timestamp(value: object | None) -> pd.Timestamp | None:
@@ -247,8 +398,3 @@ def _as_timestamp(value: object | None) -> pd.Timestamp | None:
         return pd.to_datetime(value, utc=True)
     except (TypeError, ValueError):
         return None
-
-
-def _is_recent_enough(value: pd.Timestamp) -> bool:
-    today = pd.Timestamp.now(tz=UTC).normalize()
-    return value.normalize() >= today - pd.Timedelta(days=3)

@@ -162,6 +162,34 @@ def test_fetch_bars_wrapper_applies_guarded_end(monkeypatch):
     assert observed["end"] == "2026-06-15"
 
 
+def test_fetch_node_series_wrapper_applies_guarded_end(monkeypatch):
+    monkeypatch.setenv("ABEL_API_KEY", "abel_test")
+    monkeypatch.setenv(MAX_DATA_DATE_ENV, "2026-06-15")
+    monkeypatch.setenv(DATE_GUARD_MODE_ENV, "fail-closed")
+    observed = {}
+
+    def fake_fetch_node_series(self, **kwargs):
+        observed.update(kwargs)
+        return [
+            {
+                "timestamp": "2026-06-15T00:00:00Z",
+                "node_id": "v4::demo",
+                "value": 1.0,
+            }
+        ]
+
+    from abel_edge.plugins.abel.client import AbelClient
+    from abel_edge.plugins.abel import prices as prices_module
+
+    monkeypatch.setattr(AbelClient, "fetch_node_series", fake_fetch_node_series)
+
+    frame = prices_module.fetch_node_series(node_id="v4::demo")
+
+    assert observed["node_id"] == "v4::demo"
+    assert observed["end"] == "2026-06-15"
+    assert list(frame["value"]) == [1.0]
+
+
 def test_abel_adapter_detects_polluted_cached_bars(tmp_path, monkeypatch):
     monkeypatch.setenv(MAX_DATA_DATE_ENV, "2026-06-15")
     monkeypatch.setenv(DATE_GUARD_MODE_ENV, "fail-closed")

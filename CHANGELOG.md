@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+### Added
+- Added the generic `abel-edge.point-in-time-series/v1` auxiliary-feed
+  contract with distinct observation and availability times, canonical spec
+  hashing, explicit as-of versus native-only access, and adapter-registry
+  integration.
+- Added receipt-checked CAP scalar-node materialization through the built-in
+  `abel` adapter. V4 close/volume parents use adjusted `symbols` mode;
+  non-market parents use exact `node_id` scalar-series mode and never fall
+  back to a guessed symbol.
+
+### Fixed
+
+- Graph-release doctor probes now accept explicit date windows and enforce the
+  configured maximum data date before requests and after typed-route responses.
+- V4 discovery now resolves the target once so the CAP query, typed
+  `target_ref`, and flat target projections agree for dotted symbols such as
+  `BRK.B` and `000858.SZ`; V3 discovery behavior remains unchanged.
+
 ## [0.8.10] - 2026-06-29
 
 ### Changed
@@ -14,6 +32,10 @@
 - Removed the conservative daily validation profile and its profile-specific metrics.
 
 ### Fixed
+- Preserved exchange-qualified ticker symbols such as `.SS`, `.SZ`, `.HK`,
+  and `.TO` in Abel `day_bar` requests instead of parsing them as public graph
+  node field suffixes.
+- Separated frozen CAP source-receipt replay from runtime visibility windows.
 - Compiled strategy paper catch-up now uses cursor-bounded windows so daily paper execution does not recompute from the wrong window.
 - Empty Abel bar payloads now normalize to a stable empty OHLCV frame shape instead of a columnless frame.
 

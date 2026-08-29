@@ -7,6 +7,11 @@ from click.testing import CliRunner
 from abel_edge.cli import main
 
 
+class _V3ProvenanceStub:
+    def graph_provenance(self):
+        return {"graph_id": "abel-main", "graph_version": "CausalNodeV3"}
+
+
 def test_login_json_output(monkeypatch):
     from abel_edge.plugins.abel import auth as auth_module
 
@@ -102,7 +107,7 @@ def test_login_reports_shared_auth_reuse(monkeypatch):
 
 
 def test_discover_ethusd_parents(monkeypatch, tmp_path):
-    class StubClient:
+    class StubClient(_V3ProvenanceStub):
         def __init__(self, **_kwargs):
             pass
 
@@ -126,7 +131,7 @@ def test_discover_ethusd_parents(monkeypatch, tmp_path):
 
 
 def test_discover_ethusd_markov_blanket(monkeypatch, tmp_path):
-    class StubClient:
+    class StubClient(_V3ProvenanceStub):
         def __init__(self, **_kwargs):
             pass
 
@@ -152,7 +157,7 @@ def test_discover_ethusd_markov_blanket(monkeypatch, tmp_path):
 
 
 def test_discover_json_preserves_target_node_and_field_aware_items(monkeypatch, tmp_path):
-    class StubClient:
+    class StubClient(_V3ProvenanceStub):
         def __init__(self, **_kwargs):
             pass
 
@@ -195,7 +200,7 @@ def test_discover_missing_api_key_fails(monkeypatch, tmp_path):
 
 
 def test_discover_uses_causal_abel_skill_auth_file(monkeypatch, tmp_path):
-    class StubClient:
+    class StubClient(_V3ProvenanceStub):
         def __init__(self, **_kwargs):
             pass
 

@@ -122,7 +122,14 @@ class DecisionContext:
     def inspect_feed(self, name: str) -> dict[str, Any]:
         field = self._default_feed_field(name)
         frame = self._load_feed_frame(name, field)
-        fields = [column for column in frame.columns if column not in {"timestamp", "symbol"}]
+        metadata_columns = {
+            "timestamp",
+            "symbol",
+            "event_time",
+            "available_at",
+            "revision_id",
+        }
+        fields = [column for column in frame.columns if column not in metadata_columns]
         first = pd.to_datetime(frame["timestamp"], utc=True).min() if not frame.empty else None
         last = pd.to_datetime(frame["timestamp"], utc=True).max() if not frame.empty else None
         return {
@@ -260,9 +267,23 @@ class DecisionContext:
         explicit = str(feed_cfg.get("default_field") or "").strip().lower()
         if explicit:
             return explicit
-        if str(feed_cfg.get("kind") or "").strip().lower() == "series":
+        if str(feed_cfg.get("kind") or "").strip().lower() in {
+            "series",
+            "point_in_time_series",
+        }:
             return "value"
         return "close"
+
+    def _assert_asof_allowed(self, name: str) -> None:
+        feed_cfg = ((self.engine.context or {}).get("_feeds") or {}).get(name) or {}
+        if str(feed_cfg.get("kind") or "").strip().lower() != "point_in_time_series":
+            return
+        materialization = (feed_cfg.get("series_spec") or {}).get("materialization") or {}
+        if materialization.get("alignment_policy") == "native_only":
+            raise DecisionContractError(
+                f"Feed '{name}' declares alignment_policy='native_only'; "
+                "use native series history and explicit calendar-row alignment."
+            )
 
 
 class _DecisionTargetView:
@@ -307,6 +328,7 @@ class _DecisionFeedView:
 
     def asof_series(self, field: str | None = None) -> pd.Series:
         field_name = field or self.ctx._default_feed_field(self.name)
+        self.ctx._assert_asof_allowed(self.name)
         native = self.native_series(field_name)
         aligned = _align_asof_to_index(native, self.ctx.decision_index())
         self.ctx._record_trace(
@@ -411,6 +433,7 @@ class _PointFeedView:
 
     def asof(self, field: str | None = None):
         field_name = field or self.point.ctx._default_feed_field(self.name)
+        self.point.ctx._assert_asof_allowed(self.name)
         history = self.history(field_name)
         if history.empty:
             return None

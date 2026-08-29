@@ -18,6 +18,13 @@ The framework now owns:
 Third-party projects now own only adapter-specific external-data access. They do
 not bypass framework normalization, alignment, or output validation.
 
+The additive `point_in_time_series` contract extends this boundary to
+non-ticker scalar data with distinct observation and availability times. See
+[`point-in-time-series.md`](../point-in-time-series.md). The built-in `abel`
+adapter owns canonical-node materialization under the same registry name as
+Abel bars and series; `abel_graph_node` is not a public adapter. Existing
+`bars` and legacy `series` behavior remains unchanged.
+
 ## Milestone Status
 
 - Milestone A: done

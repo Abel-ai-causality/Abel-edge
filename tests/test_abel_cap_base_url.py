@@ -44,6 +44,37 @@ def test_fetch_bars_wrapper_uses_env_path_for_cap_base_url(monkeypatch, tmp_path
     assert list(frame.columns) == ["timestamp", "symbol", "close"]
 
 
+def test_fetch_node_series_wrapper_uses_env_path_for_cap_base_url(
+    monkeypatch, tmp_path
+):
+    monkeypatch.delenv("ABEL_API_KEY", raising=False)
+    monkeypatch.delenv("CAP_API_KEY", raising=False)
+    monkeypatch.delenv("ABEL_CAP_BASE_URL", raising=False)
+    env_path = tmp_path / "custom.env"
+    _write_abel_env(env_path)
+    observed = {}
+
+    def fake_fetch_node_series(self, **kwargs):
+        observed["cap_base_url"] = self.cap_base_url
+        observed["node_id"] = kwargs["node_id"]
+        return []
+
+    monkeypatch.setattr(AbelClient, "fetch_node_series", fake_fetch_node_series)
+    from abel_edge.plugins.abel import prices as prices_module
+
+    frame = prices_module.fetch_node_series(
+        node_id="v4::catalog::demo",
+        config={"env_path": str(env_path)},
+    )
+
+    assert observed == {
+        "cap_base_url": CUSTOM_CAP_URL,
+        "node_id": "v4::catalog::demo",
+    }
+    assert frame.empty
+    assert list(frame.columns) == ["timestamp", "node_id", "value"]
+
+
 def test_discover_wrapper_uses_env_path_for_cap_base_url(monkeypatch, tmp_path):
     monkeypatch.delenv("ABEL_API_KEY", raising=False)
     monkeypatch.delenv("CAP_API_KEY", raising=False)
@@ -54,6 +85,10 @@ def test_discover_wrapper_uses_env_path_for_cap_base_url(monkeypatch, tmp_path):
 
     def fake_discover_parents(self, *, node_id, limit, api_key):
         observed["cap_base_url"] = self.cap_base_url
+        self._last_cap_provenance = {
+            "graph_id": "abel-main",
+            "graph_version": "CausalNodeV3",
+        }
         return [{"node_id": "BTCUSD.price"}]
 
     monkeypatch.setattr(AbelClient, "discover_parents", fake_discover_parents)
