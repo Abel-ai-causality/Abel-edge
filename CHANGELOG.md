@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-08-29
+
 ### Added
 - Added the generic `abel-edge.point-in-time-series/v1` auxiliary-feed
   contract with distinct observation and availability times, canonical spec
